@@ -11,6 +11,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initSignUpForm();
     initTabNavigation();
     initQuickEligibilityChecker();
+    initRecommendationSystem();
     initRegistrationForm();
     initRecordDonationForm();
     initMilestoneLookup();
@@ -165,7 +166,6 @@ function initSignUpForm() {
                 showToast(`🎉 ${data.message}`);
                 signupForm.reset();
                 
-                // Pre-fill login form and switch to user login tab
                 document.getElementById('user-idcard-input').value = idCard;
                 document.getElementById('user-pass-input').value = password;
                 switchLoginTab('user');
@@ -300,6 +300,7 @@ function switchTab(tabId) {
 
     if (tabId === 'dashboard') loadDashboardStats();
     if (tabId === 'inventory') loadBloodInventory();
+    if (tabId === 'recommendations') loadRecommendationsTab();
     if (tabId === 'donors-list') {
         loadDonorsList();
         loadPendingDonors();
@@ -308,7 +309,107 @@ function switchTab(tabId) {
 }
 
 /* ==========================================================================
-   3. Dashboard & Inventory Data Loaders
+   3. Smart Recommendation Engine Controller
+   ========================================================================== */
+function initRecommendationSystem() {
+    const weightInput = document.getElementById('recom-weight-input');
+    const bloodSelect = document.getElementById('recom-blood-select');
+
+    if (weightInput) weightInput.addEventListener('input', fetchHealthRecommendations);
+    if (bloodSelect) bloodSelect.addEventListener('change', fetchHealthRecommendations);
+}
+
+function loadRecommendationsTab() {
+    fetchHealthRecommendations();
+    fetchInventoryRecommendations();
+}
+
+async function fetchHealthRecommendations() {
+    const weightVal = parseFloat(document.getElementById('recom-weight-input')?.value || 60);
+    const bloodVal = document.getElementById('recom-blood-select')?.value || 'O';
+
+    try {
+        const res = await fetch('/api/recommendations/health', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ weight: weightVal, blood_type: bloodVal })
+        });
+        const data = await res.json();
+
+        if (data && data.success) {
+            document.getElementById('recom-water-val').textContent = `${data.water_recommendation_ml} ml`;
+            document.getElementById('recom-water-desc').textContent = data.advice.before;
+
+            const foodsList = document.getElementById('recom-foods-list');
+            if (foodsList) {
+                let html = '';
+                data.recommended_foods.forEach(item => {
+                    html += `
+                        <div class="reward-item">
+                            <div class="reward-icon">${item.icon}</div>
+                            <div class="reward-desc">
+                                <h4>${item.name}</h4>
+                                <p>${item.benefit}</p>
+                            </div>
+                        </div>
+                    `;
+                });
+                foodsList.innerHTML = html;
+            }
+        }
+    } catch (err) {
+        console.error('Error fetching health recommendations:', err);
+    }
+}
+
+async function fetchInventoryRecommendations() {
+    const urgentBox = document.getElementById('urgent-recom-box');
+    if (!urgentBox) return;
+
+    try {
+        const res = await fetch('/api/recommendations/inventory');
+        const data = await res.json();
+
+        if (data && data.success) {
+            if (data.urgent_blood_groups.length === 0) {
+                urgentBox.className = 'recom-alert-box';
+                urgentBox.style.background = '#d1fae5';
+                urgentBox.style.borderColor = '#34d399';
+                urgentBox.style.color = '#065f46';
+                urgentBox.innerHTML = `
+                    <h4 style="margin-bottom: 4px;">✅ ปริมาณคลังโลหิตอยู่ในเกณฑ์ปกติทุกหมู่เลือด</h4>
+                    <p style="font-size: 0.9rem;">คลังโลหิตสำรองเพียงพอต่อการจ่ายให้ผู้ป่วยฉุกเฉิน</p>
+                `;
+            } else {
+                urgentBox.className = 'recom-alert-box';
+                urgentBox.style.background = 'rgba(254, 226, 226, 0.7)';
+                urgentBox.style.borderColor = '#fca5a5';
+                urgentBox.style.color = '#991b1b';
+
+                let urgentMsg = `<h4>🚨 ${data.recommendation_summary}</h4><ul style="margin-top: 8px; padding-left: 20px;">`;
+                data.urgent_blood_groups.forEach(u => {
+                    urgentMsg += `<li>${u.message}</li>`;
+                });
+                urgentMsg += `</ul>`;
+
+                if (data.urgent_ready_donors.length > 0) {
+                    urgentMsg += `<p style="margin-top: 10px; font-weight: 600;">รายชื่อผู้บริจาคหมู่เลือดที่ขาดแคลนและพร้อมบริจาควันนี้:</p><ul style="padding-left: 20px;">`;
+                    data.urgent_ready_donors.forEach(d => {
+                        urgentMsg += `<li><strong>#${d.donor_id} คุณ${d.name}</strong> (หมู่ ${d.blood_type}${d.rh_factor}) - โทร: ${d.phone}</li>`;
+                    });
+                    urgentMsg += `</ul>`;
+                }
+
+                urgentBox.innerHTML = urgentMsg;
+            }
+        }
+    } catch (err) {
+        console.error('Error fetching inventory recommendations:', err);
+    }
+}
+
+/* ==========================================================================
+   4. Dashboard & Inventory Data Loaders
    ========================================================================== */
 async function loadDashboardStats() {
     try {
@@ -368,7 +469,7 @@ async function loadBloodInventory() {
 }
 
 /* ==========================================================================
-   4. Quick Eligibility Checker
+   5. Quick Eligibility Checker
    ========================================================================== */
 function initQuickEligibilityChecker() {
     const weightInput = document.getElementById('chk-weight');
@@ -433,7 +534,7 @@ function initQuickEligibilityChecker() {
 }
 
 /* ==========================================================================
-   5. Registration & Record Donation
+   6. Registration & Record Donation
    ========================================================================== */
 function initRegistrationForm() {
     const regForm = document.getElementById('register-donor-form');
@@ -614,7 +715,7 @@ function initRecordDonationForm() {
 }
 
 /* ==========================================================================
-   6. Pending Registrations & Admin Approvals
+   7. Pending Registrations & Admin Approvals
    ========================================================================== */
 async function loadPendingDonors() {
     const tableBody = document.getElementById('pending-donors-table-body');
@@ -690,7 +791,7 @@ async function verifyDonor(donorId, action) {
 }
 
 /* ==========================================================================
-   7. Edit Donor Form & Admin Actions
+   8. Edit Donor Form & Admin Actions
    ========================================================================== */
 function initEditDonorForm() {
     const editForm = document.getElementById('edit-donor-form');
@@ -823,7 +924,7 @@ function deleteDonorFromDetail() {
 }
 
 /* ==========================================================================
-   8. Milestone Lookup
+   9. Milestone Lookup
    ========================================================================== */
 function initMilestoneLookup() {
     const lookupSelect = document.getElementById('lookup-donor-select');
@@ -878,7 +979,7 @@ function triggerCertificateFromLookup() {
 }
 
 /* ==========================================================================
-   9. Donors Directory - Grouped by Blood Type & Sorted ASC by Donor ID
+   10. Donors Directory - Grouped by Blood Type & Sorted ASC by Donor ID
    ========================================================================== */
 function initDonorsDirectory() {
     const searchInput = document.getElementById('search-input');
@@ -1007,7 +1108,7 @@ async function loadDonorsList(searchQuery = '', bloodTypeFilter = '') {
 }
 
 /* ==========================================================================
-   10. Modals: Detail, Digital Card, Certificate
+   11. Modals: Detail, Digital Card, Certificate
    ========================================================================== */
 async function openDonorModal(donorId) {
     activeModalDonorId = donorId;
@@ -1135,7 +1236,7 @@ function closeCertificateModal() {
 }
 
 /* ==========================================================================
-   11. Toast Notification System
+   12. Toast Notification System
    ========================================================================== */
 function showToast(message) {
     const toast = document.getElementById('toast');

@@ -24,6 +24,7 @@
             <nav class="nav-links">
                 <button class="nav-btn active" data-tab="dashboard">📊 ภาพรวม</button>
                 <button class="nav-btn" data-tab="inventory">🏥 คงคลังโลหิต</button>
+                <button class="nav-btn" data-tab="recommendations">💡 ระบบแนะนำ</button>
                 <button class="nav-btn" data-tab="register">📝 ลงทะเบียน</button>
                 <button class="nav-btn" data-tab="workflow">⏱️ ขั้นตอนบริจาค</button>
                 <button class="nav-btn" data-tab="record">💉 บันทึกการบริจาค</button>
@@ -205,7 +206,110 @@
             </div>
         </section>
 
-        <!-- TAB 3: REGISTER DONOR -->
+        <!-- TAB 3: SMART RECOMMENDATION SYSTEM -->
+        <section id="tab-recommendations" class="tab-pane">
+            <div class="page-title">
+                <h2>💡 ระบบแนะนำอัจฉริยะ (Smart Recommendation Engine)</h2>
+                <p>คำแนะนำโภชนาการ การเตรียมตัวรายบุคคล และวิเคราะห์หมู่เลือดเร่งด่วนสำหรับคลังโลหิต</p>
+            </div>
+
+            <!-- Recommendation Section 1: Urgent Blood Needs -->
+            <div class="glass-card margin-bottom-25" style="border-left: 5px solid #ef4444;">
+                <div class="card-header">
+                    <h3 style="color: #dc2626;">🚨 ข้อแนะนำคลังโลหิตเร่งด่วน (Urgent Blood Stock Recommendation)</h3>
+                </div>
+                <div id="urgent-recom-box" class="recom-alert-box">
+                    <p>กำลังวิเคราะห์คลังโลหิต...</p>
+                </div>
+            </div>
+
+            <!-- Recommendation Section 2: Personal Nutrition & Water Calculator -->
+            <div class="dashboard-grid">
+                <div class="glass-card">
+                    <div class="card-header">
+                        <h3>💧 คำนวณปริมาณน้ำดื่ม & โภชนาการรายบุคคล</h3>
+                    </div>
+                    <div class="form-group" style="margin-bottom: 15px;">
+                        <label for="recom-weight-input">ป้อนน้ำหนักตัวของคุณ (กิโลกรัม)</label>
+                        <input type="number" id="recom-weight-input" value="60" step="0.5">
+                    </div>
+                    <div class="form-group" style="margin-bottom: 20px;">
+                        <label for="recom-blood-select">เลือกหมู่เลือดของคุณ</label>
+                        <select id="recom-blood-select">
+                            <option value="O">หมู่ O (Universal Donor)</option>
+                            <option value="A">หมู่ A</option>
+                            <option value="B">หมู่ B</option>
+                            <option value="AB">หมู่ AB (Universal Receiver)</option>
+                        </select>
+                    </div>
+
+                    <div class="recom-water-card">
+                        <div class="recom-water-icon">💧</div>
+                        <div class="recom-water-text">
+                            <h4>เป้าหมายปริมาณน้ำดื่มก่อนบริจาค</h4>
+                            <h2 id="recom-water-val" style="color:#0284c7;">600 ml</h2>
+                            <p id="recom-water-desc">ดื่มน้ำเปล่า 3-4 แก้ว ก่อนบริจาคอย่างน้อย 30 นาที ช่วยลดอาการเวียนศีรษะ</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Food Recommendations -->
+                <div class="glass-card">
+                    <div class="card-header">
+                        <h3>🥗 อาหารแนะนำสำหรับเสริมสร้างโลหิต (Iron-Rich Foods)</h3>
+                    </div>
+                    <div id="recom-foods-list" class="rewards-list">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recommendation Section 3: Blood Compatibility Matrix -->
+            <div class="glass-card margin-top-25">
+                <div class="card-header">
+                    <h3>🩸 ตารางแนะนำความเข้ากันได้ของการจ่ายโลหิต (Blood Transfusion Guide)</h3>
+                </div>
+                <div class="table-responsive">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>หมู่เลือดผู้บริจาค (Donor)</th>
+                                <th>สามารถจ่ายเลือดให้ผู้ป่วยหมู่ (Can Give To)</th>
+                                <th>สามารถรับเลือดจากผู้ป่วยหมู่ (Can Receive From)</th>
+                                <th>ลักษณะพิเศษทางโลหิตวิทยา</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><span class="blood-badge O">หมู่ O</span></td>
+                                <td><strong class="text-green">O, A, B, AB (ทุกหมู่)</strong></td>
+                                <td>O เท่านั้น</td>
+                                <td>🌟 <strong>Universal Donor</strong> (ผู้ให้โลหิตสากล สามารถช่วยชีวิตผู้ป่วยได้ทุกหมู่เลือด)</td>
+                            </tr>
+                            <tr>
+                                <td><span class="blood-badge A">หมู่ A</span></td>
+                                <td>A, AB</td>
+                                <td>A, O</td>
+                                <td>จ่ายเลือดให้ผู้ป่วยหมู่ A และ AB ได้อย่างปลอดภัย</td>
+                            </tr>
+                            <tr>
+                                <td><span class="blood-badge B">หมู่ B</span></td>
+                                <td>B, AB</td>
+                                <td>B, O</td>
+                                <td>จ่ายเลือดให้ผู้ป่วยหมู่ B และ AB ได้อย่างปลอดภัย</td>
+                            </tr>
+                            <tr>
+                                <td><span class="blood-badge AB">หมู่ AB</span></td>
+                                <td>AB เท่านั้น</td>
+                                <td><strong class="text-green">O, A, B, AB (รับได้จากทุกหมู่)</strong></td>
+                                <td>👑 <strong>Universal Receiver</strong> (ผู้รับโลหิตสากล สามารถรับเลือดจากผู้บริจาคได้ทุกหมู่)</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 4: REGISTER DONOR -->
         <section id="tab-register" class="tab-pane">
             <div class="page-title">
                 <h2>📝 แบบฟอร์มลงทะเบียนผู้บริจาคเลือดใหม่</h2>
@@ -301,7 +405,7 @@
             </div>
         </section>
 
-        <!-- TAB 4: DONATION WORKFLOW -->
+        <!-- TAB 5: DONATION WORKFLOW -->
         <section id="tab-workflow" class="tab-pane">
             <div class="page-title">
                 <h2>⏱️ ขั้นตอนในวันบริจาคเลือด (Donation Day Workflow)</h2>
@@ -366,7 +470,7 @@
             </div>
         </section>
 
-        <!-- TAB 5: RECORD DONATION -->
+        <!-- TAB 6: RECORD DONATION -->
         <section id="tab-record" class="tab-pane">
             <div class="page-title">
                 <h2>💉 บันทึกการบริจาคเลือดประจำวัน</h2>
@@ -419,7 +523,7 @@
             </div>
         </section>
 
-        <!-- TAB 6: MILESTONES & BENEFITS -->
+        <!-- TAB 7: MILESTONES & BENEFITS -->
         <section id="tab-milestones" class="tab-pane">
             <div class="page-title">
                 <h2>🏆 สวัสดิการสะสม & เข็มเชิดชูเกียรติ (Milestone Benefits)</h2>
@@ -528,7 +632,7 @@
             </div>
         </section>
 
-        <!-- TAB 7: GUIDELINES -->
+        <!-- TAB 8: GUIDELINES -->
         <section id="tab-guidelines" class="tab-pane">
             <div class="page-title">
                 <h2>📋 ข้อปฏิบัติและการดูแลตนเอง (Pre & Post Donation Guidelines)</h2>
@@ -624,7 +728,7 @@
             </div>
         </section>
 
-        <!-- TAB 8: DONORS LIST & DATABASE DIRECTORY -->
+        <!-- TAB 9: DONORS LIST & DATABASE DIRECTORY -->
         <section id="tab-donors-list" class="tab-pane">
             <div class="page-title">
                 <h2>👥 รายชื่อและประวัติผู้บริจาค (Database Directory)</h2>

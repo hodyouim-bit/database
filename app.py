@@ -145,6 +145,88 @@ def handle_login():
 
     return jsonify({'success': False, 'message': 'ประเภทการเข้าสู่ระบบไม่ถูกต้อง'}), 400
 
+@app.route('/api/recommendations/health', methods=['POST'])
+def recommend_health():
+    data = request.json or {}
+    weight = float(data.get('weight', 55.0))
+    age = int(data.get('age', 25))
+    blood_type = str(data.get('blood_type', 'O')).upper()
+
+    water_ml = max(500, int(weight * 10))
+
+    food_recommendations = [
+        {'name': 'ตับหมู / ตับไก่ / เนื้อแดง', 'icon': '🥩', 'benefit': 'อุดมด้วยธาตุเหล็กฮีม (Heme Iron) ดูดซึมสร้างเม็ดเลือดแดงได้ดีเยี่ยม'},
+        {'name': 'ผักโขม / ผักคะน้า / บรอกโคลี', 'icon': '🥦', 'benefit': 'ผักใบเขียวเข้ม มีโฟเลตและธาตุเหล็กสูง ช่วยสร้างฮีโมโกลบิน'},
+        {'name': 'ถั่วแดง / ถั่วดำ / งาดำ', 'icon': '🫘', 'benefit': 'โปรตีนและธาตุเหล็กจากพืช ช่วยเสริมความแข็งแรงของเม็ดเลือด'},
+        {'name': 'ส้ม / ฝรั่ง / วิตามินซีสูง', 'icon': '🍊', 'benefit': 'วิตามินซีช่วยเพิ่มการดูดซึมธาตุเหล็กเข้าสู่ร่างกายได้มากกว่า 2 เท่า'}
+    ]
+
+    compatibility_rules = {
+        'O': {'can_give': ['O', 'A', 'B', 'AB'], 'can_receive': ['O'], 'special': 'Universal Donor (ผู้ให้โลหิตสากล - เลือดหมู่ O ให้ได้ทุกหมู่)'},
+        'A': {'can_give': ['A', 'AB'], 'can_receive': ['A', 'O'], 'special': 'สามารถจ่ายเลือดให้ผู้ป่วยหมู่ A และ AB ได้'},
+        'B': {'can_give': ['B', 'AB'], 'can_receive': ['B', 'O'], 'special': 'สามารถจ่ายเลือดให้ผู้ป่วยหมู่ B และ AB ได้'},
+        'AB': {'can_give': ['AB'], 'can_receive': ['O', 'A', 'B', 'AB'], 'special': 'Universal Receiver (ผู้รับโลหิตสากล - รับเลือดได้จากทุกหมู่)'}
+    }
+
+    return jsonify({
+        'success': True,
+        'water_recommendation_ml': water_ml,
+        'recommended_foods': food_recommendations,
+        'compatibility': compatibility_rules.get(blood_type, compatibility_rules['O']),
+        'advice': {
+            'before': f"ควรดื่มน้ำอย่างน้อย {water_ml} ml (ประมาณ 3-4 แก้ว) ก่อนบริจาค 30 นาที นอนหลับพักผ่อนอย่างน้อย 5 ชั่วโมง",
+            'after': "นั่งพักผ่อนบนเตียง 5-10 นาที ดื่มน้ำเปล่าทดแทนปริมาณเลือด และรับประทานยาธาตุเหล็กสม่ำเสมอ"
+        }
+    })
+
+@app.route('/api/recommendations/inventory', methods=['GET'])
+def recommend_inventory():
+    conn = get_db_connection()
+    inventory = get_blood_inventory_summary(conn)
+
+    cursor = conn.cursor()
+    urgent_blood_groups = []
+    normal_blood_groups = []
+
+    for b_type, info in inventory.items():
+        if info['bags'] < 5:
+            urgent_blood_groups.append({
+                'blood_type': b_type,
+                'bags': info['bags'],
+                'urgency': 'CRITICAL',
+                'message': f"คลังโลหิตหมู่ {b_type} มีเพียง {info['bags']} ถุง (อยู่ในภาวะขาดแคลนวิกฤต) แนะนำเปิดรับบริจาคด่วน!"
+            })
+        else:
+            normal_blood_groups.append({
+                'blood_type': b_type,
+                'bags': info['bags'],
+                'status': info['status']
+            })
+
+    # Find list of eligible donors for urgent blood types
+    urgent_donors = []
+    if urgent_blood_groups:
+        urgent_types = [u['blood_type'] for u in urgent_blood_groups]
+        placeholders = ','.join(['?'] * len(urgent_types))
+        cursor.execute(f"SELECT * FROM donors WHERE blood_type IN ({placeholders}) AND status = 'approved' ORDER BY last_donation_date ASC", urgent_types)
+        rows = cursor.fetchall()
+        
+        for r in rows:
+            donor = Donor.from_row(r)
+            next_info = donor.get_next_eligible_date()
+            if next_info['is_ready_today']:
+                urgent_donors.append(donor.to_dict())
+
+    conn.close()
+
+    return jsonify({
+        'success': True,
+        'urgent_blood_groups': urgent_blood_groups,
+        'normal_blood_groups': normal_blood_groups,
+        'urgent_ready_donors': urgent_donors,
+        'recommendation_summary': f"พบ {len(urgent_blood_groups)} หมู่เลือดที่ขาดแคลนเร่งด่วน และมีผู้บริจาคพร้อมบริจาคในวันนี้จำนวน {len(urgent_donors)} ท่าน"
+    })
+
 @app.route('/api/donors', methods=['GET'])
 def get_donors():
     search_q = request.args.get('q', '').strip()
