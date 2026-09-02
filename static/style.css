@@ -119,18 +119,27 @@ body {
     display: block;
 }
 
-/* Admin Status Badge */
-.admin-badge {
+/* User & Admin Status Badges */
+.role-badge {
     display: flex;
     align-items: center;
     gap: 8px;
-    background: #fef3c7;
-    border: 1px solid #f59e0b;
-    color: #92400e;
     padding: 4px 12px;
     border-radius: 20px;
     font-size: 0.825rem;
     font-weight: 600;
+}
+
+.user-role-badge {
+    background: #e0f2fe;
+    border: 1px solid #38bdf8;
+    color: #0369a1;
+}
+
+.admin-role-badge {
+    background: #fef3c7;
+    border: 1px solid #f59e0b;
+    color: #92400e;
 }
 
 .btn-logout {
@@ -142,6 +151,35 @@ body {
     cursor: pointer;
     text-decoration: underline;
     margin-left: 4px;
+}
+
+/* Login Tab Toggle */
+.login-tab-toggle {
+    display: flex;
+    gap: 8px;
+    background: rgba(241, 245, 249, 0.6);
+    padding: 4px;
+    border-radius: var(--radius-md);
+    margin-bottom: 20px;
+}
+
+.login-tab-btn {
+    flex: 1;
+    padding: 10px 14px;
+    border: none;
+    background: transparent;
+    border-radius: var(--radius-sm);
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.login-tab-btn.active {
+    background: var(--card-bg);
+    color: var(--primary-crimson);
+    box-shadow: var(--shadow-sm);
 }
 
 /* Navigation Links */

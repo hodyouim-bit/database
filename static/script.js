@@ -3,11 +3,11 @@
  */
 
 let activeModalDonorId = null;
-let isAdminLoggedIn = false;
+let currentRole = 'guest'; // 'guest', 'user' (read-only), 'admin'
 
 document.addEventListener('DOMContentLoaded', () => {
     initThemeToggle();
-    initAdminAuth();
+    initRoleAuth();
     initTabNavigation();
     initQuickEligibilityChecker();
     initRegistrationForm();
@@ -29,19 +29,56 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 /* ==========================================================================
-   1. Admin Authentication & Session Management
+   1. Dual-Role Authentication & Session Management
    ========================================================================== */
-function initAdminAuth() {
-    const adminToken = localStorage.getItem('adminToken');
-    if (adminToken) {
-        setAdminState(true);
-    } else {
-        setAdminState(false);
+function initRoleAuth() {
+    const savedRole = localStorage.getItem('userRole') || 'guest';
+    const savedName = localStorage.getItem('userName') || '';
+
+    setRoleState(savedRole, savedName);
+
+    // General User Read-Only Login Form
+    const userForm = document.getElementById('user-login-form');
+    if (userForm) {
+        userForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const inputVal = document.getElementById('user-idcard-input').value.trim();
+            const password = document.getElementById('user-pass-input').value.trim();
+
+            try {
+                const res = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        login_type: 'user',
+                        username: inputVal,
+                        id_card: inputVal,
+                        password: password
+                    })
+                });
+
+                const data = await res.json();
+                if (res.ok && data.success) {
+                    localStorage.setItem('userRole', 'user');
+                    localStorage.setItem('userName', data.user.name);
+                    setRoleState('user', data.user.name);
+                    closeLoginModal();
+                    showToast(`👤 ${data.message}`);
+                    loadDonorsList();
+                } else {
+                    showToast(`❌ ${data.message || 'ข้อมูลการเข้าสู่ระบบผู้ใช้ทั่วไปไม่ถูกต้อง'}`);
+                }
+            } catch (err) {
+                console.error('User login error:', err);
+                showToast('❌ ไม่สามารถเข้าสู่ระบบผู้ใช้ทั่วไปได้');
+            }
+        });
     }
 
-    const loginForm = document.getElementById('admin-login-form');
-    if (loginForm) {
-        loginForm.addEventListener('submit', async (e) => {
+    // Admin Staff Login Form
+    const adminForm = document.getElementById('admin-login-form');
+    if (adminForm) {
+        adminForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             const username = document.getElementById('admin-user-input').value.trim();
             const password = document.getElementById('admin-pass-input').value.trim();
@@ -50,53 +87,87 @@ function initAdminAuth() {
                 const res = await fetch('/api/login', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ username, password })
+                    body: JSON.stringify({
+                        login_type: 'admin',
+                        username: username,
+                        password: password
+                    })
                 });
 
                 const data = await res.json();
                 if (res.ok && data.success) {
-                    localStorage.setItem('adminToken', data.token);
-                    setAdminState(true);
-                    closeAdminLoginModal();
-                    showToast(`🔑 ยินดีต้อนรับ ${data.user.name} เข้าสู่ระบบ!`);
+                    localStorage.setItem('userRole', 'admin');
+                    localStorage.setItem('userName', data.user.name);
+                    setRoleState('admin', data.user.name);
+                    closeLoginModal();
+                    showToast(`🔑 ${data.message}`);
                     loadDonorsList();
                 } else {
                     showToast(`❌ ${data.message || 'ชื่อผู้ใช้หรือรหัสผ่าน Admin ไม่ถูกต้อง'}`);
                 }
             } catch (err) {
                 console.error('Admin login error:', err);
-                showToast('❌ ไม่สามารถเข้าสู่ระบบได้');
+                showToast('❌ ไม่สามารถเข้าสู่ระบบ Admin ได้');
             }
         });
     }
 }
 
-function setAdminState(loggedIn) {
-    isAdminLoggedIn = loggedIn;
-    const loginBtn = document.getElementById('admin-login-btn');
-    const badge = document.getElementById('admin-status-badge');
+function setRoleState(role, displayName = '') {
+    currentRole = role;
+    const loginBtn = document.getElementById('open-login-btn');
+    const userBadge = document.getElementById('user-status-badge');
+    const adminBadge = document.getElementById('admin-status-badge');
+    const nameSpan = document.getElementById('user-display-name');
 
-    if (loggedIn) {
+    if (role === 'admin') {
         if (loginBtn) loginBtn.classList.add('hidden');
-        if (badge) badge.classList.remove('hidden');
+        if (userBadge) userBadge.classList.add('hidden');
+        if (adminBadge) adminBadge.classList.remove('hidden');
+    } else if (role === 'user') {
+        if (loginBtn) loginBtn.classList.add('hidden');
+        if (adminBadge) adminBadge.classList.add('hidden');
+        if (userBadge) userBadge.classList.remove('hidden');
+        if (nameSpan) nameSpan.textContent = displayName || 'ผู้ใช้งานทั่วไป';
     } else {
         if (loginBtn) loginBtn.classList.remove('hidden');
-        if (badge) badge.classList.add('hidden');
+        if (userBadge) userBadge.classList.add('hidden');
+        if (adminBadge) adminBadge.classList.add('hidden');
     }
 }
 
-function openAdminLoginModal() {
-    document.getElementById('admin-login-modal').classList.remove('hidden');
+function openLoginModal() {
+    document.getElementById('login-modal').classList.remove('hidden');
 }
 
-function closeAdminLoginModal() {
-    document.getElementById('admin-login-modal').classList.add('hidden');
+function closeLoginModal() {
+    document.getElementById('login-modal').classList.add('hidden');
 }
 
-function logoutAdmin() {
-    localStorage.removeItem('adminToken');
-    setAdminState(false);
-    showToast('👋 ออกจากระบบ Admin เรียบร้อยแล้ว');
+function switchLoginTab(tabType) {
+    const userBtn = document.getElementById('tab-user-btn');
+    const adminBtn = document.getElementById('tab-admin-btn');
+    const userForm = document.getElementById('user-login-form');
+    const adminForm = document.getElementById('admin-login-form');
+
+    if (tabType === 'user') {
+        userBtn.classList.add('active');
+        adminBtn.classList.remove('active');
+        userForm.classList.remove('hidden');
+        adminForm.classList.add('hidden');
+    } else {
+        adminBtn.classList.add('active');
+        userBtn.classList.remove('active');
+        adminForm.classList.remove('hidden');
+        userForm.classList.add('hidden');
+    }
+}
+
+function logoutRole() {
+    localStorage.removeItem('userRole');
+    localStorage.removeItem('userName');
+    setRoleState('guest');
+    showToast('👋 ออกจากระบบเรียบร้อยแล้ว');
     loadDonorsList();
 }
 
@@ -442,7 +513,7 @@ function initRecordDonationForm() {
 }
 
 /* ==========================================================================
-   6. Edit Donor Form & Actions
+   6. Edit Donor Form & Admin Actions
    ========================================================================== */
 function initEditDonorForm() {
     const editForm = document.getElementById('edit-donor-form');
@@ -450,6 +521,11 @@ function initEditDonorForm() {
 
     editForm.addEventListener('submit', async (e) => {
         e.preventDefault();
+
+        if (currentRole !== 'admin') {
+            showToast('⚠️ สิทธิ์ไม่เพียงพอ: เฉพาะเจ้าหน้าที่ Admin เท่านั้นที่สามารถแก้ไขข้อมูลได้');
+            return;
+        }
 
         const donorId = parseInt(document.getElementById('edit-donor-id').value);
         const idCard = document.getElementById('edit-id-card').value.trim();
@@ -468,7 +544,7 @@ function initEditDonorForm() {
         const payload = {
             id_card: idCard, name: name, age: age, gender: gender, weight: weight,
             blood_type: bloodType, rh_factor: rhFactor, phone: phone, donation_count: count,
-            last_donation_date: lastDate || None, email: email, address: address
+            last_donation_date: lastDate || null, email: email, address: address
         };
 
         try {
@@ -498,6 +574,11 @@ function initEditDonorForm() {
 }
 
 function openEditDonorModal(donorId) {
+    if (currentRole !== 'admin') {
+        showToast('⚠️ สิทธิ์ไม่เพียงพอ: เฉพาะเจ้าหน้าที่ Admin เท่านั้นที่สามารถแก้ไขข้อมูลได้');
+        return;
+    }
+
     const donor = allDonorsCache.find(d => d.donor_id === donorId);
     if (!donor) return;
 
@@ -528,6 +609,11 @@ function openEditDonorModalFromDetail() {
 }
 
 async function deleteDonor(donorId) {
+    if (currentRole !== 'admin') {
+        showToast('⚠️ สิทธิ์ไม่เพียงพอ: เฉพาะเจ้าหน้าที่ Admin เท่านั้นที่สามารถลบข้อมูลได้');
+        return;
+    }
+
     const donor = allDonorsCache.find(d => d.donor_id === donorId);
     if (!donor) return;
 
@@ -647,7 +733,6 @@ async function loadDonorsList(searchQuery = '', bloodTypeFilter = '') {
                 return;
             }
 
-            // Group donors by blood type
             const bloodOrder = ['O', 'A', 'B', 'AB'];
             const grouped = { 'O': [], 'A': [], 'B': [], 'AB': [] };
 
@@ -661,15 +746,12 @@ async function loadDonorsList(searchQuery = '', bloodTypeFilter = '') {
             });
 
             let fullHtml = '';
-
-            // If user selected a specific filter, only show that group
             const displayGroups = bloodTypeFilter ? [bloodTypeFilter] : bloodOrder;
 
             displayGroups.forEach(bGroup => {
                 const donorsInGroup = grouped[bGroup] || [];
                 if (donorsInGroup.length === 0 && bloodTypeFilter) return;
 
-                // Group Section Header Row
                 fullHtml += `
                     <tr class="blood-group-header-row">
                         <td colspan="9">
@@ -700,7 +782,8 @@ async function loadDonorsList(searchQuery = '', bloodTypeFilter = '') {
                             '<span class="ready-badge">✅ พร้อมบริจาค</span>' : 
                             `<span class="wait-badge">⏳ ${next.formatted_date} (${next.days_remaining} วัน)</span>`;
 
-                        const adminActions = isAdminLoggedIn ? 
+                        // Render action buttons strictly according to currentRole
+                        const adminActions = (currentRole === 'admin') ? 
                             `<button class="btn btn-warning btn-sm" onclick="openEditDonorModal(${d.donor_id})" title="แก้ไขข้อมูลผู้บริจาค">✏️ แก้ไข</button>
                              <button class="btn btn-danger btn-sm" onclick="deleteDonor(${d.donor_id})" title="ลบข้อมูลผู้บริจาค">🗑️ ลบ</button>` : '';
 
@@ -756,7 +839,7 @@ async function openDonorModal(donorId) {
 
             const editBtn = document.getElementById('detail-edit-btn');
             const delBtn = document.getElementById('detail-delete-btn');
-            if (isAdminLoggedIn) {
+            if (currentRole === 'admin') {
                 if (editBtn) editBtn.classList.remove('hidden');
                 if (delBtn) delBtn.classList.remove('hidden');
             } else {

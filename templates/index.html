@@ -32,13 +32,18 @@
                 <button class="nav-btn" data-tab="donors-list">👥 รายชื่อผู้บริจาค</button>
             </nav>
             <div class="header-actions">
-                <div id="admin-status-badge" class="admin-badge hidden">
-                    <span>👤 Admin: <strong>6812732101</strong></span>
-                    <button onclick="logoutAdmin()" class="btn-logout" title="ออกจากระบบ Admin">🚪 ออกจากระบบ</button>
+                <!-- User Status Badges -->
+                <div id="user-status-badge" class="role-badge user-role-badge hidden">
+                    <span>👤 <span id="user-display-name">ผู้ใช้งานทั่วไป</span> <small>(อ่านอย่างเดียว)</small></span>
+                    <button onclick="logoutRole()" class="btn-logout" title="ออกจากระบบ">🚪 ออกจากระบบ</button>
                 </div>
-                <button id="admin-login-btn" class="btn btn-secondary btn-sm" onclick="openAdminLoginModal()">🔑 ล็อกอิน Admin</button>
+                <div id="admin-status-badge" class="role-badge admin-role-badge hidden">
+                    <span>👤 Admin: <strong>6812732101</strong></span>
+                    <button onclick="logoutRole()" class="btn-logout" title="ออกจากระบบ Admin">🚪 ออกจากระบบ</button>
+                </div>
+                <button id="open-login-btn" class="btn btn-secondary btn-sm" onclick="openLoginModal()">🔑 เข้าสู่ระบบ</button>
                 <button id="theme-toggle" class="btn btn-icon" title="สลับโหมด มืด/สว่าง">🌙</button>
-                <button class="btn btn-primary" onclick="switchTab('record')">+ บันทึกบริจาคใหม่</button>
+                <button id="new-donation-btn" class="btn btn-primary" onclick="switchTab('record')">+ บันทึกบริจาคใหม่</button>
             </div>
         </div>
     </header>
@@ -187,7 +192,6 @@
             </div>
 
             <div class="inventory-grid" id="inventory-container">
-                <!-- Dynamic Blood Stock Cards -->
                 <div class="inv-card">
                     <div class="inv-header">
                         <span class="blood-type-badge O">หมู่ O</span>
@@ -422,7 +426,6 @@
                 <p>สิทธิประโยชน์และของรางวัลเชิดชูเกียรติที่ได้รับตามจำนวนครั้งการบริจาคโลหิตสะสม (`donation_count`)</p>
             </div>
 
-            <!-- Donor Milestone Lookup Tool -->
             <div class="glass-card margin-bottom-25">
                 <div class="card-header">
                     <h3>🔍 ตรวจสอบสวัสดิการรายบุคคล (Individual Donor Benefit Lookup)</h3>
@@ -625,7 +628,7 @@
         <section id="tab-donors-list" class="tab-pane">
             <div class="page-title">
                 <h2>👥 รายชื่อและประวัติผู้บริจาค (Database Directory)</h2>
-                <p>ค้นหา จัดกลุ่มตามหมู่เลือด วันพร้อมบริจาคครั้งถัดไป และสิทธิประโยชน์ในระบบฐานข้อมูล SQLite</p>
+                <p>ค้นหา จัดกลุ่มตามหมวดหมู่เลือด วันพร้อมบริจาคครั้งถัดไป และสิทธิประโยชน์ในระบบฐานข้อมูล SQLite</p>
             </div>
 
             <div class="glass-card">
@@ -667,18 +670,42 @@
         </section>
     </main>
 
-    <!-- ADMIN LOGIN MODAL -->
-    <div id="admin-login-modal" class="modal-overlay hidden">
+    <!-- UNIFIED LOGIN MODAL (2 TABS: USER READ-ONLY vs ADMIN) -->
+    <div id="login-modal" class="modal-overlay hidden">
         <div class="modal-content glass-card login-modal">
-            <button class="modal-close" onclick="closeAdminLoginModal()">&times;</button>
+            <button class="modal-close" onclick="closeLoginModal()">&times;</button>
             <div class="modal-header">
                 <div class="modal-avatar">🔑</div>
                 <div class="modal-donor-title">
-                    <h3>เข้าสู่ระบบ Admin เจ้าหน้าที่</h3>
-                    <p>กรอกรหัสประจำตัว Admin เพื่อเปิดสิทธิ์การแก้ไขและลบข้อมูล</p>
+                    <h3>เข้าสู่ระบบ (Login Center)</h3>
+                    <p>เลือกรอบการเข้าใช้งานตามสิทธิ์บทบาทของคุณ</p>
                 </div>
             </div>
-            <form id="admin-login-form">
+            
+            <!-- Login Tabs Toggle -->
+            <div class="login-tab-toggle">
+                <button id="tab-user-btn" class="login-tab-btn active" onclick="switchLoginTab('user')">👤 ผู้ใช้งานทั่วไป (อ่านอย่างเดียว)</button>
+                <button id="tab-admin-btn" class="login-tab-btn" onclick="switchLoginTab('admin')">🔑 เจ้าหน้าที่ Admin (สิทธิ์เต็ม)</button>
+            </div>
+
+            <!-- Tab 1: General Read-Only User Form -->
+            <form id="user-login-form" class="login-subform">
+                <div class="form-group" style="margin-bottom: 15px;">
+                    <label for="user-idcard-input">เลขบัตรประชาชน (13 หลัก) หรือ Username <span class="required">*</span></label>
+                    <input type="text" id="user-idcard-input" placeholder="เลขบัตรประชาชน 13 หลัก หรือ user" value="user" required>
+                </div>
+                <div class="form-group" style="margin-bottom: 20px;">
+                    <label for="user-pass-input">รหัสผ่าน <small>(กรณีใช้ user ให้กรอก 1234)</small></label>
+                    <input type="password" id="user-pass-input" placeholder="รหัสผ่าน (เช่น 1234)" value="1234">
+                </div>
+                <div class="modal-footer">
+                    <button type="submit" class="btn btn-primary">เข้าสู่ระบบผู้ใช้ทั่วไป (Read-Only)</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeLoginModal()">ยกเลิก</button>
+                </div>
+            </form>
+
+            <!-- Tab 2: Admin Staff Form -->
+            <form id="admin-login-form" class="login-subform hidden">
                 <div class="form-group" style="margin-bottom: 15px;">
                     <label for="admin-user-input">Username เจ้าหน้าที่ Admin <span class="required">*</span></label>
                     <input type="text" id="admin-user-input" placeholder="เช่น 6812732101" value="6812732101" required>
@@ -688,8 +715,8 @@
                     <input type="password" id="admin-pass-input" placeholder="รหัสผ่าน Admin" value="choijraa" required>
                 </div>
                 <div class="modal-footer">
-                    <button type="submit" class="btn btn-primary">ยืนยันการล็อกอิน Admin</button>
-                    <button type="button" class="btn btn-secondary" onclick="closeAdminLoginModal()">ยกเลิก</button>
+                    <button type="submit" class="btn btn-primary">เข้าสู่ระบบเจ้าหน้าที่ Admin</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeLoginModal()">ยกเลิก</button>
                 </div>
             </form>
         </div>

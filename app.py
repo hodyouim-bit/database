@@ -16,28 +16,79 @@ def home():
     return render_template('index.html')
 
 @app.route('/api/login', methods=['POST'])
-def admin_login():
+def handle_login():
     data = request.json or {}
+    login_type = data.get('login_type', 'admin') # 'admin' or 'user'
     username = str(data.get('username', '')).strip()
     password = str(data.get('password', '')).strip()
+    id_card = str(data.get('id_card', '')).strip()
 
-    # Admin Login Credential Check: Username 6812732101, Password choijraa or choljraa
-    if username == '6812732101' and password in ['choijraa', 'choljraa']:
-        return jsonify({
-            'success': True,
-            'message': 'เข้าสู่ระบบ Admin สำเร็จ',
-            'token': 'admin_session_token_6812732101',
-            'user': {
-                'username': '6812732101',
-                'name': 'เจ้าหน้าที่ Admin (6812732101)',
-                'role': 'admin'
-            }
-        })
-    else:
+    # 1. Admin Staff Login Check
+    if login_type == 'admin' or username == '6812732101':
+        if username == '6812732101' and password in ['choijraa', 'choljraa']:
+            return jsonify({
+                'success': True,
+                'message': 'เข้าสู่ระบบ Admin สำเร็จ',
+                'role': 'admin',
+                'token': 'token_admin_6812732101',
+                'user': {
+                    'username': '6812732101',
+                    'name': 'เจ้าหน้าที่ Admin (6812732101)',
+                    'role': 'admin'
+                }
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'message': 'ชื่อผู้ใช้หรือรหัสผ่าน Admin ไม่ถูกต้อง (กรุณาใช้ 6812732101 / choijraa)'
+            }), 401
+
+    # 2. General Read-Only User Login Check
+    if login_type == 'user' or username == 'user' or id_card:
+        # Option A: Login via Donor ID Card (13 digits)
+        if id_card or len(username) == 13:
+            search_card = id_card or username
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            cursor.execute('SELECT * FROM donors WHERE id_card = ?', (search_card,))
+            row = cursor.fetchone()
+            conn.close()
+
+            if row:
+                donor = Donor.from_row(row)
+                return jsonify({
+                    'success': True,
+                    'message': f'เข้าสู่ระบบในฐานะผู้บริจาคคุณ {donor.name} (อ่านได้อย่างเดียว)',
+                    'role': 'user',
+                    'token': f'token_user_{donor.donor_id}',
+                    'user': {
+                        'username': donor.id_card,
+                        'name': donor.name,
+                        'donor_id': donor.donor_id,
+                        'role': 'user'
+                    }
+                })
+
+        # Option B: General Demo User (user / 1234)
+        if (username == 'user' or not username) and (password == '1234' or not password):
+            return jsonify({
+                'success': True,
+                'message': 'เข้าสู่ระบบในฐานะผู้ใช้งานทั่วไป (อ่านได้อย่างเดียว)',
+                'role': 'user',
+                'token': 'token_user_general',
+                'user': {
+                    'username': 'user',
+                    'name': 'ผู้ใช้งานทั่วไป (Read-Only)',
+                    'role': 'user'
+                }
+            })
+
         return jsonify({
             'success': False,
-            'message': 'ชื่อผู้ใช้หรือรหัสผ่าน Admin ไม่ถูกต้อง (กรุณาใช้ 6812732101 / choijraa)'
+            'message': 'ไม่พบเลขบัตรประชาชนในระบบ หรือรหัสผ่านผู้ใช้ทั่วไปไม่ถูกต้อง (ใช้ user / 1234)'
         }), 401
+
+    return jsonify({'success': False, 'message': 'ประเภทการเข้าสู่ระบบไม่ถูกต้อง'}), 400
 
 @app.route('/api/donors', methods=['GET'])
 def get_donors():
@@ -182,17 +233,8 @@ def register_donor():
         return jsonify({'success': False, 'message': 'กรุณากรอกเลขบัตรประชาชน ชื่อ-นามสกุล และเบอร์โทรศัพท์'}), 400
 
     temp_donor = Donor(
-        donor_id=None,
-        id_card=id_card,
-        name=name,
-        age=age,
-        gender=gender,
-        weight=weight,
-        blood_type=blood_type,
-        rh_factor=rh_factor,
-        phone=phone,
-        email=email,
-        address=address
+        donor_id=None, id_card=id_card, name=name, age=age, gender=gender,
+        weight=weight, blood_type=blood_type, rh_factor=rh_factor, phone=phone, email=email, address=address
     )
 
     health_form = {
@@ -220,14 +262,9 @@ def register_donor():
         INSERT INTO health_screenings (donor_id, screening_date, sleep_hours, high_fat_meal_free, water_intake_ok, alcohol_free_24h, smoking_free_1h, passed, notes)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
-            donor_id, 
-            datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-            health_form['sleep_hours'],
-            not health_form['high_fat_meal'],
-            health_form['water_intake'],
-            not health_form['alcohol_24h'],
-            not health_form['smoking_1h'],
-            is_eligible,
+            donor_id, datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            health_form['sleep_hours'], not health_form['high_fat_meal'], health_form['water_intake'],
+            not health_form['alcohol_24h'], not health_form['smoking_1h'], is_eligible,
             "; ".join(reasons) if not is_eligible else "ผ่านการคัดกรองสมบูรณ์"
         ))
         
