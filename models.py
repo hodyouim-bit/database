@@ -89,6 +89,14 @@ def seed_sample_data(conn):
         INSERT INTO donors (id_card, name, age, gender, weight, blood_type, rh_factor, phone, email, address, donation_count, last_donation_date)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', donor)
+        donor_id = cursor.lastrowid
+        
+        # Seed initial sample donation record if donation_count > 0
+        if donor[10] > 0 and donor[11]:
+            cursor.execute('''
+            INSERT INTO donation_records (donor_id, donation_date, volume_ml, staff_notes)
+            VALUES (?, ?, 450, 'บริจาคโลหิตเรียบร้อยตามมาตรฐาน')
+            ''', (donor_id, donor[11]))
         
     conn.commit()
     print("Sample donor data seeded successfully.")
@@ -467,28 +475,30 @@ class Donor:
 
 
 def get_blood_inventory_summary(db_conn):
+    """
+    Calculates blood inventory bags and volume (ml) directly from the donor database
+    based on actual donor donation counts (donation_count) for blood groups O, A, B, AB.
+    """
     cursor = db_conn.cursor()
     cursor.execute('''
-    SELECT d.blood_type, COUNT(r.record_id) as total_bags, SUM(r.volume_ml) as total_volume_ml
-    FROM donation_records r
-    JOIN donors d ON r.donor_id = d.donor_id
-    GROUP BY d.blood_type
+    SELECT blood_type, SUM(donation_count) as total_bags 
+    FROM donors 
+    GROUP BY blood_type
     ''')
     rows = cursor.fetchall()
     
     inventory = {
-        'O': {'bags': 0, 'volume_ml': 0, 'status': 'ปกติ'},
-        'A': {'bags': 0, 'volume_ml': 0, 'status': 'ปกติ'},
-        'B': {'bags': 0, 'volume_ml': 0, 'status': 'ปกติ'},
-        'AB': {'bags': 0, 'volume_ml': 0, 'status': 'ปกติ'}
+        'O': {'bags': 0, 'volume_ml': 0, 'volume_liters': 0.0, 'status': 'ขาดแคลน'},
+        'A': {'bags': 0, 'volume_ml': 0, 'volume_liters': 0.0, 'status': 'ขาดแคลน'},
+        'B': {'bags': 0, 'volume_ml': 0, 'volume_liters': 0.0, 'status': 'ขาดแคลน'},
+        'AB': {'bags': 0, 'volume_ml': 0, 'volume_liters': 0.0, 'status': 'ขาดแคลน'}
     }
     
     for row in rows:
         b_type = row['blood_type']
         if b_type in inventory:
             bags = row['total_bags'] or 0
-            vol = row['total_volume_ml'] or 0
-            
+            vol = bags * 450
             status = 'ขาดแคลน' if bags < 5 else ('สมบูรณ์' if bags >= 15 else 'ปกติ')
             inventory[b_type] = {
                 'bags': bags,
