@@ -3,7 +3,7 @@ from flask_cors import CORS
 import sqlite3
 import os
 from datetime import datetime
-from models import get_db_connection, init_db, Donor
+from models import get_db_connection, init_db, Donor, get_blood_inventory_summary
 
 app = Flask(__name__, template_folder='templates', static_folder='static')
 CORS(app)
@@ -70,6 +70,29 @@ def get_donor_detail(donor_id):
     data = donor.to_dict()
     data['history'] = history
     return jsonify({'success': True, 'donor': data})
+
+@app.route('/api/donors/<int:donor_id>/certificate', methods=['GET'])
+def get_donor_certificate(donor_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('SELECT * FROM donors WHERE donor_id = ?', (donor_id,))
+    row = cursor.fetchone()
+
+    if not row:
+        conn.close()
+        return jsonify({'success': False, 'message': 'ไม่พบข้อมูลผู้บริจาคในระบบ'}), 404
+
+    donor = Donor.from_row(row)
+    conn.close()
+
+    cert_data = donor.get_certificate_data()
+    if not cert_data:
+        return jsonify({
+            'success': False, 
+            'message': 'ผู้บริจาคท่านนี้ยังไม่บรรลุเกณฑ์สวัสดิการในการออกใบประกาศเกียรติคุณ (ต้องบริจาคอย่างน้อย 1 ครั้งขึ้นไป)'
+        }), 400
+
+    return jsonify({'success': True, 'certificate': cert_data})
 
 @app.route('/api/donors', methods=['POST'])
 def register_donor():
@@ -202,6 +225,14 @@ def record_donation():
         'result': donation_result
     })
 
+@app.route('/api/inventory', methods=['GET'])
+def get_inventory():
+    conn = get_db_connection()
+    inventory = get_blood_inventory_summary(conn)
+    conn.close()
+
+    return jsonify({'success': True, 'inventory': inventory})
+
 @app.route('/api/check-eligibility', methods=['POST'])
 def check_eligibility():
     data = request.json or {}
@@ -245,6 +276,8 @@ def get_stats():
     cursor.execute('SELECT blood_type, COUNT(*) as count FROM donors GROUP BY blood_type')
     blood_groups = {row['blood_type']: row['count'] for row in cursor.fetchall()}
 
+    inventory = get_blood_inventory_summary(conn)
+
     # Milestone stats
     cursor.execute('SELECT COUNT(*) FROM donors WHERE donation_count >= 1')
     milestone_1 = cursor.fetchone()[0]
@@ -262,6 +295,7 @@ def get_stats():
         'total_donations': total_donations,
         'total_volume_liters': round(total_volume_ml / 1000.0, 1),
         'blood_groups': blood_groups,
+        'inventory': inventory,
         'milestones_achieved': {
             'count_1': milestone_1,
             'count_7': milestone_7,

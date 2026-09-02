@@ -98,7 +98,7 @@ class Donor:
     """
     Donor OOP Class representing a blood donor entity.
     Encapsulates donor information, donation_count, health screening evaluation,
-    milestone benefits calculations, and standard rewards.
+    milestone benefits calculations, 90-day next eligible donation date, and standard rewards.
     """
     
     MILESTONES = [
@@ -204,7 +204,7 @@ class Donor:
 
     def can_donate(self, health_form=None):
         """
-        Check donor eligibility based on weight, age, and health history form.
+        Check donor eligibility based on weight, age, health history form, and 90-day interval rule.
         """
         reasons = []
         is_eligible = True
@@ -218,6 +218,12 @@ class Donor:
         if self.age < 17 or self.age > 70:
             is_eligible = False
             reasons.append(f"อายุต้องอยู่ระหว่าง 17 - 70 ปี (ปัจจุบัน {self.age} ปี)")
+
+        # 90-day interval check
+        next_info = self.get_next_eligible_date()
+        if not next_info['is_ready_today']:
+            is_eligible = False
+            reasons.append(f"ต้องเว้นระยะบริจาคอย่างน้อย 3 เดือน (90 วัน) - พร้อมบริจาคครั้งถัดไปในวันที่ {next_info['formatted_date']} (เหลืออีก {next_info['days_remaining']} วัน)")
 
         # Health screening form check if provided
         if health_form:
@@ -243,6 +249,46 @@ class Donor:
                 reasons.append("ต้องงดสูบบุหรี่ก่อนและหลังบริจาคอย่างน้อย 1 ชั่วโมง")
 
         return is_eligible, reasons
+
+    def get_next_eligible_date(self):
+        """
+        Calculates the next eligible donation date (90 days after last_donation_date).
+        """
+        if not self.last_donation_date:
+            return {
+                'eligible_date': datetime.now().strftime('%Y-%m-%d'),
+                'formatted_date': 'พร้อมบริจาคได้ทันที',
+                'is_ready_today': True,
+                'days_remaining': 0
+            }
+
+        try:
+            last_date = datetime.strptime(self.last_donation_date, '%Y-%m-%d')
+            next_date = last_date + timedelta(days=90)
+            today = datetime.now()
+
+            days_remaining = (next_date - today).days
+            if days_remaining <= 0:
+                return {
+                    'eligible_date': next_date.strftime('%Y-%m-%d'),
+                    'formatted_date': next_date.strftime('%d/%m/%Y'),
+                    'is_ready_today': True,
+                    'days_remaining': 0
+                }
+            else:
+                return {
+                    'eligible_date': next_date.strftime('%Y-%m-%d'),
+                    'formatted_date': next_date.strftime('%d/%m/%Y'),
+                    'is_ready_today': False,
+                    'days_remaining': days_remaining
+                }
+        except ValueError:
+            return {
+                'eligible_date': datetime.now().strftime('%Y-%m-%d'),
+                'formatted_date': 'พร้อมบริจาคได้ทันที',
+                'is_ready_today': True,
+                'days_remaining': 0
+            }
 
     def get_milestone_benefits(self):
         """
@@ -327,6 +373,27 @@ class Donor:
             }
         ]
 
+    def get_certificate_data(self):
+        """
+        Generates official honor certificate metadata for milestone achievers.
+        """
+        earned = [m for m in self.MILESTONES if self.donation_count >= m['count']]
+        highest_milestone = earned[-1] if earned else None
+
+        if not highest_milestone:
+            return None
+
+        return {
+            'certificate_no': f"CERT-BD-{self.donor_id:05d}-{self.donation_count:03d}",
+            'donor_name': self.name,
+            'blood_type': f"{self.blood_type}{self.rh_factor}",
+            'donation_count': self.donation_count,
+            'milestone_title': highest_milestone['title'],
+            'badge_icon': highest_milestone['badge_icon'],
+            'issue_date': datetime.now().strftime('%d/%m/%Y'),
+            'honor_level': f"เข็มเชิดชูเกียรติ ชั้นที่ {highest_milestone['count']}"
+        }
+
     def record_donation(self, db_conn, volume_ml=450, donation_date=None, notes=''):
         """
         Records a new blood donation, updates donation_count, and saves record to SQLite DB.
@@ -379,8 +446,50 @@ class Donor:
             'address': self.address,
             'donation_count': self.donation_count,
             'last_donation_date': self.last_donation_date,
+            'next_eligible': self.get_next_eligible_date(),
             'created_at': self.created_at,
             'milestone_benefits': self.get_milestone_benefits(),
             'next_milestone': self.get_next_milestone_progress(),
-            'standard_rewards': self.get_standard_rewards()
+            'standard_rewards': self.get_standard_rewards(),
+            'certificate': self.get_certificate_data()
         }
+
+
+def get_blood_inventory_summary(db_conn):
+    """
+    Calculates total collected blood inventory grouped by blood type (A, B, O, AB).
+    """
+    cursor = db_conn.cursor()
+    
+    # Query volume by blood group
+    cursor.execute('''
+    SELECT d.blood_type, COUNT(r.record_id) as total_bags, SUM(r.volume_ml) as total_volume_ml
+    FROM donation_records r
+    JOIN donors d ON r.donor_id = d.donor_id
+    GROUP BY d.blood_type
+    ''')
+    rows = cursor.fetchall()
+    
+    inventory = {
+        'O': {'bags': 0, 'volume_ml': 0, 'status': 'ปกติ'},
+        'A': {'bags': 0, 'volume_ml': 0, 'status': 'ปกติ'},
+        'B': {'bags': 0, 'volume_ml': 0, 'status': 'ปกติ'},
+        'AB': {'bags': 0, 'volume_ml': 0, 'status': 'ปกติ'}
+    }
+    
+    for row in rows:
+        b_type = row['blood_type']
+        if b_type in inventory:
+            bags = row['total_bags'] or 0
+            vol = row['total_volume_ml'] or 0
+            
+            # Stock status threshold
+            status = 'ขาดแคลน' if bags < 5 else ('สมบูรณ์' if bags >= 15 else 'ปกติ')
+            inventory[b_type] = {
+                'bags': bags,
+                'volume_ml': vol,
+                'volume_liters': round(vol / 1000.0, 1),
+                'status': status
+            }
+            
+    return inventory

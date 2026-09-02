@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ระบบรับบริจาคเลือด & บริหารจัดการสวัสดิการ | Blood Donation System</title>
-    <meta name="description" content="ระบบรับบริจาคเลือด ลงทะเบียน คัดกรองความพร้อม คำนวณสวัสดิการและเข็มเชิดชูเกียรติสะสม">
+    <title>ระบบรับบริจาคเลือด & บริหารจัดการสวัสดิการ | Blood Donation System v2.0</title>
+    <meta name="description" content="ระบบรับบริจาคเลือด ลงทะเบียน คัดกรองความพร้อม บัตรผู้บริจาคดิจิทัล คงคลังโลหิต คำนวณสวัสดิการและเข็มเชิดชูเกียรติสะสม">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -17,12 +17,13 @@
             <div class="brand">
                 <div class="brand-icon">🩸</div>
                 <div class="brand-text">
-                    <h1>ระบบรับบริจาคเลือด</h1>
+                    <h1>ระบบรับบริจาคเลือด <span class="v2-tag">v2.0</span></h1>
                     <span>Blood Donation & Donor Benefits Management System</span>
                 </div>
             </div>
             <nav class="nav-links">
                 <button class="nav-btn active" data-tab="dashboard">📊 ภาพรวม</button>
+                <button class="nav-btn" data-tab="inventory">🏥 คงคลังโลหิต</button>
                 <button class="nav-btn" data-tab="register">📝 ลงทะเบียน</button>
                 <button class="nav-btn" data-tab="workflow">⏱️ ขั้นตอนบริจาค</button>
                 <button class="nav-btn" data-tab="record">💉 บันทึกการบริจาค</button>
@@ -31,6 +32,7 @@
                 <button class="nav-btn" data-tab="donors-list">👥 รายชื่อผู้บริจาค</button>
             </nav>
             <div class="header-actions">
+                <button id="theme-toggle" class="btn btn-icon" title="สลับโหมด มืด/สว่าง">🌙</button>
                 <button class="btn btn-primary" onclick="switchTab('record')">+ บันทึกบริจาคใหม่</button>
             </div>
         </div>
@@ -44,11 +46,11 @@
             <div class="hero-banner">
                 <div class="hero-text">
                     <h2>"การบริจาคโลหิต 1 ครั้ง ช่วยเหลือได้มากกว่า 3 ชีวิต"</h2>
-                    <p>ระบบบริหารจัดการข้อมูลผู้บริจาคเลือด บันทึกประวัติ และคำนวณสวัสดิการสิทธิประโยชน์ตามจำนวนครั้งการบริจาค (`donation_count`)</p>
+                    <p>ระบบบริหารจัดการข้อมูลผู้บริจาคเลือด ออกบัตรดิจิทัล คำนวณวันบริจาคครั้งถัดไป (90 วัน) และสิทธิประโยชน์สะสม (`donation_count`)</p>
                 </div>
                 <div class="hero-actions">
                     <button class="btn btn-light" onclick="switchTab('register')">ลงทะเบียนบริจาคเลือด</button>
-                    <button class="btn btn-outline-light" onclick="switchTab('workflow')">ดูขั้นตอนการบริจาค (1 ชม.)</button>
+                    <button class="btn btn-outline-light" onclick="switchTab('inventory')">เช็กคลังโลหิตสำรอง</button>
                 </div>
             </div>
 
@@ -172,7 +174,29 @@
             </div>
         </section>
 
-        <!-- TAB 2: REGISTER DONOR -->
+        <!-- TAB 2: BLOOD INVENTORY STATUS -->
+        <section id="tab-inventory" class="tab-pane">
+            <div class="page-title">
+                <h2>🏥 สถานะคงคลังโลหิตสำรอง (Blood Bank Inventory Tracker)</h2>
+                <p>ปริมาณถุงเลือดสำรองและปริมาณรวม (มิลลิลิตร) แยกตามหมู่เลือด O, A, B, AB</p>
+            </div>
+
+            <div class="inventory-grid" id="inventory-container">
+                <!-- Dynamic Blood Stock Cards -->
+                <div class="inv-card">
+                    <div class="inv-header">
+                        <span class="blood-type-badge O">หมู่ O</span>
+                        <span class="inv-status normal">กำลังโหลด...</span>
+                    </div>
+                    <div class="inv-body">
+                        <h3 id="inv-bags-O">0 ถุง</h3>
+                        <p id="inv-vol-O">0 มิลลิลิตร</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 3: REGISTER DONOR -->
         <section id="tab-register" class="tab-pane">
             <div class="page-title">
                 <h2>📝 แบบฟอร์มลงทะเบียนผู้บริจาคเลือดใหม่</h2>
@@ -268,7 +292,7 @@
             </div>
         </section>
 
-        <!-- TAB 3: DONATION WORKFLOW -->
+        <!-- TAB 4: DONATION WORKFLOW -->
         <section id="tab-workflow" class="tab-pane">
             <div class="page-title">
                 <h2>⏱️ ขั้นตอนในวันบริจาคเลือด (Donation Day Workflow)</h2>
@@ -333,7 +357,7 @@
             </div>
         </section>
 
-        <!-- TAB 4: RECORD DONATION -->
+        <!-- TAB 5: RECORD DONATION -->
         <section id="tab-record" class="tab-pane">
             <div class="page-title">
                 <h2>💉 บันทึกการบริจาคเลือดประจำวัน</h2>
@@ -355,6 +379,7 @@
                             <h4 id="prev-name">-</h4>
                             <p>หมู่เลือด: <strong id="prev-blood">-</strong> | จำนวนครั้งบริจาคปัจจุบัน: <strong id="prev-count">0</strong> ครั้ง</p>
                             <p>น้ำหนัก: <span id="prev-weight">0</span> kg | วันบริจาคล่าสุด: <span id="prev-date">-</span></p>
+                            <p id="prev-eligibility-tag" class="eligibility-tag">-</p>
                         </div>
                     </div>
 
@@ -385,7 +410,7 @@
             </div>
         </section>
 
-        <!-- TAB 5: MILESTONES & BENEFITS -->
+        <!-- TAB 6: MILESTONES & BENEFITS -->
         <section id="tab-milestones" class="tab-pane">
             <div class="page-title">
                 <h2>🏆 สวัสดิการสะสม & เข็มเชิดชูเกียรติ (Milestone Benefits)</h2>
@@ -413,6 +438,11 @@
                             <div id="lp-progress-fill" class="progress-bar-fill" style="width: 0%;"></div>
                         </div>
                         <p id="lp-remaining-text" class="sub-text">อีก 0 ครั้ง เพื่อบรรลุเป้าหมายถัดไป</p>
+                    </div>
+
+                    <div class="lookup-actions" style="margin-bottom: 20px;">
+                        <button class="btn btn-secondary" onclick="triggerDigitalCardFromLookup()">🪪 ดูบัตรประจำตัวดิจิทัล</button>
+                        <button class="btn btn-primary" onclick="triggerCertificateFromLookup()">📜 พิมพ์ใบประกาศเกียรติคุณ</button>
                     </div>
 
                     <!-- Earned Benefits List -->
@@ -494,7 +524,7 @@
             </div>
         </section>
 
-        <!-- TAB 6: GUIDELINES -->
+        <!-- TAB 7: GUIDELINES -->
         <section id="tab-guidelines" class="tab-pane">
             <div class="page-title">
                 <h2>📋 ข้อปฏิบัติและการดูแลตนเอง (Pre & Post Donation Guidelines)</h2>
@@ -592,11 +622,11 @@
             </div>
         </section>
 
-        <!-- TAB 7: DONORS LIST & DATABASE DIRECTORY -->
+        <!-- TAB 8: DONORS LIST & DATABASE DIRECTORY -->
         <section id="tab-donors-list" class="tab-pane">
             <div class="page-title">
                 <h2>👥 รายชื่อและประวัติผู้บริจาค (Database Directory)</h2>
-                <p>ค้นหา จัดกลุ่มตามหมู่เลือด และเปิดดูประวัติการบริจาคสะสมในระบบฐานข้อมูล SQLite Real-time</p>
+                <p>ค้นหา จัดกลุ่มตามหมู่เลือด วันพร้อมบริจาคครั้งถัดไป และสิทธิประโยชน์ในระบบฐานข้อมูล SQLite</p>
             </div>
 
             <div class="glass-card">
@@ -627,7 +657,7 @@
                                 <th>น้ำหนัก</th>
                                 <th>หมู่เลือด</th>
                                 <th>จำนวนบริจาค (`donation_count`)</th>
-                                <th>บริจาคล่าสุด</th>
+                                <th>พร้อมบริจาคถัดไป (90 วัน)</th>
                                 <th>สถานะสวัสดิการ</th>
                                 <th>การจัดการ</th>
                             </tr>
@@ -663,6 +693,11 @@
                     <div class="d-detail-item"><span>บริจาคสะสม:</span> <strong id="modal-count" class="text-crimson">0</strong> ครั้ง</div>
                 </div>
 
+                <div class="modal-actions-row" style="margin-bottom: 20px; display:flex; gap:12px;">
+                    <button class="btn btn-secondary btn-sm" onclick="openDigitalCardModalFromDetail()">🪪 ดูบัตรดิจิทัล</button>
+                    <button class="btn btn-primary btn-sm" onclick="openCertificateModalFromDetail()">📜 ออกใบประกาศเกียรติคุณ</button>
+                </div>
+
                 <div class="modal-section-title">🏆 เข็มเชิดชูเกียรติ & สวัสดิการที่ได้รับ</div>
                 <div id="modal-milestones-list" class="modal-milestones">
                     <!-- Dynamic badges -->
@@ -687,6 +722,73 @@
 
             <div class="modal-footer">
                 <button class="btn btn-secondary" onclick="closeDonorModal()">ปิด</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- DIGITAL DONOR CARD MODAL -->
+    <div id="digital-card-modal" class="modal-overlay hidden">
+        <div class="modal-content glass-card card-modal">
+            <button class="modal-close" onclick="closeDigitalCardModal()">&times;</button>
+            <div class="digital-id-card">
+                <div class="card-top">
+                    <div class="card-brand">🩸 บัตรประจำตัวผู้บริจาคโลหิตดิจิทัล</div>
+                    <span class="card-org">ศูนย์บริการโลหิตแห่งชาติ</span>
+                </div>
+                <div class="card-main-info">
+                    <div class="card-qr-box">
+                        <div class="qr-placeholder">📱<br><small>SCAN QR</small></div>
+                    </div>
+                    <div class="card-user-details">
+                        <h3 id="card-donor-name">สมชาย รักชาติ</h3>
+                        <p id="card-donor-id">ID: #00001 | 1100100234567</p>
+                        <div class="card-tags">
+                            <span id="card-blood-badge" class="blood-badge O">หมู่ O+</span>
+                            <span id="card-count-badge" class="card-count">สะสม 6 ครั้ง</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-footer-info">
+                    <p>วันบริจาคล่าสุด: <strong id="card-last-date">-</strong></p>
+                    <p>วันพร้อมบริจาคถัดไป: <strong id="card-next-date" class="text-green">-</strong></p>
+                </div>
+            </div>
+            <div class="modal-footer print-actions">
+                <button class="btn btn-primary" onclick="window.print()">🖨️ พิมพ์บัตรประจำตัว</button>
+                <button class="btn btn-secondary" onclick="closeDigitalCardModal()">ปิด</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- HONOR CERTIFICATE MODAL -->
+    <div id="certificate-modal" class="modal-overlay hidden">
+        <div class="modal-content glass-card cert-modal">
+            <button class="modal-close" onclick="closeCertificateModal()">&times;</button>
+            <div class="honor-certificate">
+                <div class="cert-border-outer">
+                    <div class="cert-header">
+                        <div class="cert-seal">🏅</div>
+                        <h2>ใบประกาศเกียรติคุณ</h2>
+                        <p class="cert-sub">ประกาศเกียรติคุณผู้บริจาคโลหิตสะสม</p>
+                    </div>
+                    <div class="cert-body">
+                        <p>ขอมอบใบประกาศเกียรติคุณฉบับนี้เพื่อแสดงว่า</p>
+                        <h1 id="cert-donor-name">นายสมชาย รักชาติ</h1>
+                        <p>เป็นผู้มีความเสียสละ อุทิศโลหิตเพื่อช่วยเหลือชีวิตเพื่อนมนุษย์</p>
+                        <div class="cert-highlight-box">
+                            <h3 id="cert-milestone-title">บริจาคโลหิตครบ 24 ครั้ง</h3>
+                            <p id="cert-honor-level">ได้รับสิทธิการยกเว้นค่าห้อง/ค่ารักษาพยาบาล และเข็มเชิดชูเกียรติ ชั้นที่ 24</p>
+                        </div>
+                    </div>
+                    <div class="cert-footer">
+                        <div class="cert-date">ให้ไว้ ณ วันที่ <span id="cert-issue-date">02/09/2026</span></div>
+                        <div class="cert-no" id="cert-no">CERT-BD-00001</div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer print-actions">
+                <button class="btn btn-primary" onclick="window.print()">🖨️ พิมพ์ใบประกาศเกียรติคุณ</button>
+                <button class="btn btn-secondary" onclick="closeCertificateModal()">ปิด</button>
             </div>
         </div>
     </div>
