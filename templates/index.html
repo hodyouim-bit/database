@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบรับบริจาคเลือด & บริหารจัดการสวัสดิการ | Blood Donation System</title>
+    <meta name="description" content="ระบบรับบริจาคเลือด ลงทะเบียน คัดกรองความพร้อม คำนวณสวัสดิการและเข็มเชิดชูเกียรติสะสม">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <!-- Top Navigation Header -->
+    <header class="app-header">
+        <div class="header-container">
+            <div class="brand">
+                <div class="brand-icon">🩸</div>
+                <div class="brand-text">
+                    <h1>ระบบรับบริจาคเลือด</h1>
+                    <span>Blood Donation & Donor Benefits Management System</span>
+                </div>
+            </div>
+            <nav class="nav-links">
+                <button class="nav-btn active" data-tab="dashboard">📊 ภาพรวม</button>
+                <button class="nav-btn" data-tab="register">📝 ลงทะเบียน</button>
+                <button class="nav-btn" data-tab="workflow">⏱️ ขั้นตอนบริจาค</button>
+                <button class="nav-btn" data-tab="record">💉 บันทึกการบริจาค</button>
+                <button class="nav-btn" data-tab="milestones">🏆 สวัสดิการ & เข็มเชิดชูเกียรติ</button>
+                <button class="nav-btn" data-tab="guidelines">📋 ข้อปฏิบัติก่อน-หลัง</button>
+                <button class="nav-btn" data-tab="donors-list">👥 รายชื่อผู้บริจาค</button>
+            </nav>
+            <div class="header-actions">
+                <button class="btn btn-primary" onclick="switchTab('record')">+ บันทึกบริจาคใหม่</button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Body Container -->
+    <main class="main-content">
+        
+        <!-- TAB 1: DASHBOARD -->
+        <section id="tab-dashboard" class="tab-pane active">
+            <div class="hero-banner">
+                <div class="hero-text">
+                    <h2>"การบริจาคโลหิต 1 ครั้ง ช่วยเหลือได้มากกว่า 3 ชีวิต"</h2>
+                    <p>ระบบบริหารจัดการข้อมูลผู้บริจาคเลือด บันทึกประวัติ และคำนวณสวัสดิการสิทธิประโยชน์ตามจำนวนครั้งการบริจาค (`donation_count`)</p>
+                </div>
+                <div class="hero-actions">
+                    <button class="btn btn-light" onclick="switchTab('register')">ลงทะเบียนบริจาคเลือด</button>
+                    <button class="btn btn-outline-light" onclick="switchTab('workflow')">ดูขั้นตอนการบริจาค (1 ชม.)</button>
+                </div>
+            </div>
+
+            <!-- Dashboard Stats Grid -->
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-icon red">👥</div>
+                    <div class="stat-info">
+                        <span class="stat-label">ผู้บริจาคทั้งหมด</span>
+                        <h3 id="stat-total-donors">0</h3>
+                        <span class="stat-sub">ลงทะเบียนในระบบ</span>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon crimson">🩸</div>
+                    <div class="stat-info">
+                        <span class="stat-label">ยอดบริจาคสะสม</span>
+                        <h3 id="stat-total-donations">0</h3>
+                        <span class="stat-sub">ครั้งทั้งหมด</span>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon blue">🧪</div>
+                    <div class="stat-info">
+                        <span class="stat-label">ปริมาณเลือดรวม</span>
+                        <h3 id="stat-total-volume">0 L</h3>
+                        <span class="stat-sub">ลิตร (350-450 ml/ครั้ง)</span>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon gold">🏆</div>
+                    <div class="stat-info">
+                        <span class="stat-label">ผู้ได้รับสวัสดิการ 24+ ครั้ง</span>
+                        <h3 id="stat-milestone-24">0</h3>
+                        <span class="stat-sub">สิทธิยกเว้นค่าห้อง/ค่ารักษา</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Dashboard Row: Eligibility Quick Checker & Basic Rewards -->
+            <div class="dashboard-grid">
+                <!-- Eligibility Quick Checker Widget -->
+                <div class="glass-card">
+                    <div class="card-header">
+                        <h3>⚡ ประเมินความพร้อมก่อนบริจาคเลือด (Eligibility Checker)</h3>
+                    </div>
+                    <form id="quick-check-form" class="checker-form">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="chk-weight">น้ำหนัก (กิโลกรัม) <span class="required">*ต้อง >= 45 kg</span></label>
+                                <input type="number" id="chk-weight" value="55" step="0.5" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="chk-age">อายุ (ปี) <span class="required">*17 - 70 ปี</span></label>
+                                <input type="number" id="chk-age" value="25" required>
+                            </div>
+                        </div>
+
+                        <div class="checklist-grid">
+                            <label class="checkbox-card">
+                                <input type="checkbox" id="chk-sleep" checked>
+                                <span>🛌 นอนหลับเต็มอิ่มอย่างน้อย 5 ชั่วโมง</span>
+                            </label>
+                            <label class="checkbox-card">
+                                <input type="checkbox" id="chk-fat-free" checked>
+                                <span>🥗 งดอาหารไขมันสูงใน 6 ชั่วโมงที่ผ่านมา</span>
+                            </label>
+                            <label class="checkbox-card">
+                                <input type="checkbox" id="chk-water" checked>
+                                <span>💧 ดื่มน้ำเปล่า 3-4 แก้ว ก่อนมา 30 นาที</span>
+                            </label>
+                            <label class="checkbox-card">
+                                <input type="checkbox" id="chk-alcohol" checked>
+                                <span>🍷 งดแอลกอฮอล์ครบ 24 ชั่วโมง</span>
+                            </label>
+                            <label class="checkbox-card">
+                                <input type="checkbox" id="chk-smoking" checked>
+                                <span>🚬 งดสูบบุหรี่ก่อนมาอย่างน้อย 1 ชั่วโมง</span>
+                            </label>
+                        </div>
+
+                        <div id="check-result-box" class="result-box pass">
+                            <div class="result-icon">✅</div>
+                            <div class="result-content">
+                                <h4 id="result-status">คุณมีความพร้อมในการบริจาคเลือด!</h4>
+                                <p id="result-reasons">ร่างกายสมบูรณ์และปฏิบัติตามข้อกำหนดถูกต้อง</p>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Basic Rewards Card Showcase -->
+                <div class="glass-card">
+                    <div class="card-header">
+                        <h3>🎁 สิ่งตอบแทนเบื้องต้น (ได้รับทุกครั้งที่บริจาค)</h3>
+                    </div>
+                    <div class="rewards-list">
+                        <div class="reward-item">
+                            <div class="reward-icon">☕</div>
+                            <div class="reward-desc">
+                                <h4>อาหารและเครื่องดื่ม</h4>
+                                <p>บริการน้ำดื่ม ชา กาแฟ และขนมว่าง ทั้งก่อนและหลังการบริจาค</p>
+                            </div>
+                        </div>
+                        <div class="reward-item">
+                            <div class="reward-icon">💊</div>
+                            <div class="reward-desc">
+                                <h4>ยาบำรุงเลือด</h4>
+                                <p>ได้รับยาธาตุเหล็ก (Iron Supplement) นำไปรับประทานเพื่อบำรุงโลหิต</p>
+                            </div>
+                        </div>
+                        <div class="reward-item">
+                            <div class="reward-icon">🎁</div>
+                            <div class="reward-desc">
+                                <h4>ของที่ระลึกแคมเปญ</h4>
+                                <p>เสื้อยืด กระเป๋าผ้า หรือของพรีเมียมประจำแคมเปญพิเศษ (ถ้ามี)</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 2: REGISTER DONOR -->
+        <section id="tab-register" class="tab-pane">
+            <div class="page-title">
+                <h2>📝 แบบฟอร์มลงทะเบียนผู้บริจาคเลือดใหม่</h2>
+                <p>กรอกข้อมูลประวัติส่วนตัวและแบบสอบถามสุขภาพตามความจริง เพื่อความปลอดภัยของผู้บริจาคและผู้รับเลือด</p>
+            </div>
+
+            <div class="glass-card max-w-800">
+                <form id="register-donor-form">
+                    <div class="form-section-title">1. ข้อมูลส่วนตัว (Donor Profile)</div>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="reg-id-card">เลขประจำตัวประชาชน <span class="required">*</span></label>
+                            <input type="text" id="reg-id-card" placeholder="13 หลัก เช่น 1100100999888" maxlength="13" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="reg-name">ชื่อ-นามสกุล <span class="required">*</span></label>
+                            <input type="text" id="reg-name" placeholder="นาย / นาง / นางสาว..." required>
+                        </div>
+                        <div class="form-group">
+                            <label for="reg-age">อายุ (ปี) <span class="required">*</span></label>
+                            <input type="number" id="reg-age" placeholder="เช่น 25" min="17" max="70" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="reg-gender">เพศ <span class="required">*</span></label>
+                            <select id="reg-gender" required>
+                                <option value="ชาย">ชาย</option>
+                                <option value="หญิง">หญิง</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="reg-weight">น้ำหนัก (กิโลกรัม) <span class="required">* (ต้อง >= 45 kg)</span></label>
+                            <input type="number" id="reg-weight" step="0.1" placeholder="เช่น 55.0" required>
+                            <small id="weight-warn" class="warn-text hidden">⚠️ น้ำหนักตัวต่ำกว่า 45 กก. ไม่สามารถบริจาคได้</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="reg-blood-type">หมู่เลือด (Blood Type) <span class="required">*</span></label>
+                            <select id="reg-blood-type" required>
+                                <option value="O">O</option>
+                                <option value="A">A</option>
+                                <option value="B">B</option>
+                                <option value="AB">AB</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="reg-rh">Rh Factor</label>
+                            <select id="reg-rh">
+                                <option value="+">Rh Positive (+)</option>
+                                <option value="-">Rh Negative (-)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="reg-phone">เบอร์โทรศัพท์ <span class="required">*</span></label>
+                            <input type="tel" id="reg-phone" placeholder="08X-XXX-XXXX" required>
+                        </div>
+                        <div class="form-group full-width">
+                            <label for="reg-email">อีเมล (ถ้ามี)</label>
+                            <input type="email" id="reg-email" placeholder="example@email.com">
+                        </div>
+                        <div class="form-group full-width">
+                            <label for="reg-address">ที่อยู่ปัจจุบัน</label>
+                            <textarea id="reg-address" rows="2" placeholder="บ้านเลขที่ ถนน ตำบล/แขวง อำเภอ/เขต จังหวัด"></textarea>
+                        </div>
+                    </div>
+
+                    <div class="form-section-title">2. แบบสอบถามคัดกรองประวัติสุขภาพ (Health Screening Checklist)</div>
+                    <div class="checklist-grid">
+                        <label class="checkbox-card">
+                            <input type="checkbox" id="reg-sleep" checked>
+                            <span>🛌 นอนหลับพักผ่อนเต็มอิ่มอย่างน้อย 5 ชั่วโมง</span>
+                        </label>
+                        <label class="checkbox-card">
+                            <input type="checkbox" id="reg-fat-meal">
+                            <span>❌ งดอาหารไขมันสูง (ข้าวขาหมู, ข้าวมันไก่, แกงกะทิ, ของทอด) ใน 6 ชั่วโมงที่ผ่านมา</span>
+                        </label>
+                        <label class="checkbox-card">
+                            <input type="checkbox" id="reg-water" checked>
+                            <span>💧 ดื่มน้ำเปล่า 3-4 แก้ว ก่อนบริจาค 30 นาที</span>
+                        </label>
+                        <label class="checkbox-card">
+                            <input type="checkbox" id="reg-alcohol">
+                            <span>🍷 งดเครื่องดื่มแอลกอฮอล์ทุกชนิดอย่างน้อย 24 ชั่วโมง</span>
+                        </label>
+                        <label class="checkbox-card">
+                            <input type="checkbox" id="reg-smoking">
+                            <span>🚬 งดสูบบุหรี่ก่อนและหลังบริจาคอย่างน้อย 1 ชั่วโมง</span>
+                        </label>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary btn-lg">บันทึกการลงทะเบียน</button>
+                    </div>
+                </form>
+            </div>
+        </section>
+
+        <!-- TAB 3: DONATION WORKFLOW -->
+        <section id="tab-workflow" class="tab-pane">
+            <div class="page-title">
+                <h2>⏱️ ขั้นตอนในวันบริจาคเลือด (Donation Day Workflow)</h2>
+                <p>ใช้เวลาโดยรวมประมาณ 1 ชั่วโมง โดยมี 5 ขั้นตอนหลักตามมาตรฐานความปลอดภัย</p>
+            </div>
+
+            <div class="workflow-timeline">
+                <div class="workflow-step">
+                    <div class="step-badge">1</div>
+                    <div class="step-card">
+                        <div class="step-header">
+                            <h3>1. ลงทะเบียน (Registration)</h3>
+                            <span class="step-time">⏱️ 5-10 นาที</span>
+                        </div>
+                        <p>กรอกแบบฟอร์มใบสมัครและคัดกรองประวัติสุขภาพตามความเป็นจริง เพื่อประเมินความเสี่ยงเบื้องต้น</p>
+                    </div>
+                </div>
+
+                <div class="workflow-step">
+                    <div class="step-badge">2</div>
+                    <div class="step-card">
+                        <div class="step-header">
+                            <h3>2. ตรวจร่างกาย (Physical Exam)</h3>
+                            <span class="step-time">⏱️ 5 นาที</span>
+                        </div>
+                        <p>วัดความดันโลหิต ชีพจร และชั่งน้ำหนักตัว <strong>(ต้องมีน้ำหนักหนัก 45 กิโลกรัมขึ้นไป)</strong></p>
+                    </div>
+                </div>
+
+                <div class="workflow-step">
+                    <div class="step-badge">3</div>
+                    <div class="step-card">
+                        <div class="step-header">
+                            <h3>3. เช็กความเข้มข้นเลือด (Blood Screening)</h3>
+                            <span class="step-time">⏱️ 5 นาที</span>
+                        </div>
+                        <p>เจาะปลายนิ้วเพื่อตรวจความเข้มข้นของเลือด (Hemoglobin) และยืนยันหมู่เลือด (Blood Group)</p>
+                    </div>
+                </div>
+
+                <div class="workflow-step">
+                    <div class="step-badge">4</div>
+                    <div class="step-card">
+                        <div class="step-header">
+                            <h3>4. สัมภาษณ์ประวัติ (Risk Screening Interview)</h3>
+                            <span class="step-time">⏱️ 5-10 นาที</span>
+                        </div>
+                        <p>เจ้าหน้าที่คัดกรองสัมภาษณ์ความเสี่ยงและประวัติการเจ็บป่วยอย่างละเอียด เพื่อความปลอดภัยสูงสุดของผู้รับเลือด</p>
+                    </div>
+                </div>
+
+                <div class="workflow-step highlight">
+                    <div class="step-badge">5</div>
+                    <div class="step-card">
+                        <div class="step-header">
+                            <h3>5. ขั้นตอนเจาะเก็บเลือด (Phlebotomy Process)</h3>
+                            <span class="step-time">⏱️ 10-15 นาที</span>
+                        </div>
+                        <p>นอนเตียงบริจาค เจ้าหน้าที่ทำการเจาะเก็บเลือดปริมาณ <strong>350 - 450 มิลลิลิตร</strong> โดยใช้เข็มฆ่าเชื้อแบบใช้ครั้งเดียวทิ้ง</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 4: RECORD DONATION -->
+        <section id="tab-record" class="tab-pane">
+            <div class="page-title">
+                <h2>💉 บันทึกการบริจาคเลือดประจำวัน</h2>
+                <p>บันทึกประวัติการบริจาคเลือด ระบบจะทำการเพิ่มจำนวนครั้ง (`donation_count += 1`) ใน SQLite DB และคำนวณสวัสดิการอัตโนมัติ</p>
+            </div>
+
+            <div class="glass-card max-w-800">
+                <form id="record-donation-form">
+                    <div class="form-group">
+                        <label for="rec-donor-select">เลือกรหัส/ชื่อผู้บริจาค <span class="required">*</span></label>
+                        <select id="rec-donor-select" required>
+                            <option value="">-- กรุณาเลือกผู้บริจาค --</option>
+                        </select>
+                    </div>
+
+                    <div id="donor-preview-card" class="donor-mini-card hidden">
+                        <div class="mini-avatar">🩸</div>
+                        <div class="mini-info">
+                            <h4 id="prev-name">-</h4>
+                            <p>หมู่เลือด: <strong id="prev-blood">-</strong> | จำนวนครั้งบริจาคปัจจุบัน: <strong id="prev-count">0</strong> ครั้ง</p>
+                            <p>น้ำหนัก: <span id="prev-weight">0</span> kg | วันบริจาคล่าสุด: <span id="prev-date">-</span></p>
+                        </div>
+                    </div>
+
+                    <div class="form-grid margin-top-15">
+                        <div class="form-group">
+                            <label for="rec-volume">ปริมาณเลือดที่บริจาค (มิลลิลิตร) <span class="required">*</span></label>
+                            <select id="rec-volume" required>
+                                <option value="450" selected>450 ml (มาตรฐาน)</option>
+                                <option value="350">350 ml</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="rec-date">วันที่บริจาค <span class="required">*</span></label>
+                            <input type="date" id="rec-date" required>
+                        </div>
+
+                        <div class="form-group full-width">
+                            <label for="rec-notes">บันทึกเพิ่มเติมจากเจ้าหน้าที่</label>
+                            <textarea id="rec-notes" rows="2" placeholder="เช่น บริจาคเรียบร้อย ไม่มีอาการหน้ามืด"></textarea>
+                        </div>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary btn-lg">บันทึกการบริจาคเลือด</button>
+                    </div>
+                </form>
+            </div>
+        </section>
+
+        <!-- TAB 5: MILESTONES & BENEFITS -->
+        <section id="tab-milestones" class="tab-pane">
+            <div class="page-title">
+                <h2>🏆 สวัสดิการสะสม & เข็มเชิดชูเกียรติ (Milestone Benefits)</h2>
+                <p>สิทธิประโยชน์และของรางวัลเชิดชูเกียรติที่ได้รับตามจำนวนครั้งการบริจาคโลหิตสะสม (`donation_count`)</p>
+            </div>
+
+            <!-- Donor Milestone Lookup Tool -->
+            <div class="glass-card margin-bottom-25">
+                <div class="card-header">
+                    <h3>🔍 ตรวจสอบสวัสดิการรายบุคคล (Individual Donor Benefit Lookup)</h3>
+                </div>
+                <div class="lookup-bar">
+                    <select id="lookup-donor-select">
+                        <option value="">-- เลือกผู้บริจาคเพื่อเช็กสวัสดิการ --</option>
+                    </select>
+                </div>
+                <div id="lookup-result-display" class="lookup-results hidden">
+                    <!-- Progress Card -->
+                    <div class="progress-box">
+                        <div class="progress-info">
+                            <h4>ระดับและเป้าหมายถัดไป: <span id="lp-next-title">-</span></h4>
+                            <span id="lp-progress-text">0%</span>
+                        </div>
+                        <div class="progress-bar-bg">
+                            <div id="lp-progress-fill" class="progress-bar-fill" style="width: 0%;"></div>
+                        </div>
+                        <p id="lp-remaining-text" class="sub-text">อีก 0 ครั้ง เพื่อบรรลุเป้าหมายถัดไป</p>
+                    </div>
+
+                    <!-- Earned Benefits List -->
+                    <div class="milestones-grid" id="lp-milestones-container">
+                        <!-- Dynamic rendered milestones -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Standard Milestone Rules Showcase Grid -->
+            <h3 class="section-heading">เกณฑ์สวัสดิการและเข็มเชิดชูเกียรติทั้งหมด</h3>
+            <div class="milestone-rules-grid">
+                <div class="rule-card">
+                    <div class="rule-badge">1 ครั้ง</div>
+                    <div class="rule-icon">🏅</div>
+                    <h4>บริจาคครั้งแรก</h4>
+                    <ul>
+                        <li>เข็มกลัดที่ระลึกสำหรับผู้บริจาคหน้าใหม่</li>
+                        <li>บัตรประจำตัวผู้บริจาคโลหิต</li>
+                        <li>เข็มเชิดชูเกียรติ ชั้นที่ 1</li>
+                    </ul>
+                </div>
+
+                <div class="rule-card">
+                    <div class="rule-badge">7 ครั้ง</div>
+                    <div class="rule-icon">🎗️</div>
+                    <h4>บริจาคครบ 7 ครั้ง</h4>
+                    <ul>
+                        <li>สิทธิในการตรวจสุขภาพพื้นฐานฟรี (ตามเงื่อนไขสถานพยาบาล)</li>
+                        <li>เข็มเชิดชูเกียรติ ชั้นที่ 7</li>
+                    </ul>
+                </div>
+
+                <div class="rule-card">
+                    <div class="rule-badge">16 ครั้ง</div>
+                    <div class="rule-icon">🥉</div>
+                    <h4>บริจาคครบ 16 ครั้ง</h4>
+                    <ul>
+                        <li>เข็มเชิดชูเกียรติ ชั้นที่ 16</li>
+                    </ul>
+                </div>
+
+                <div class="rule-card highlight-gold">
+                    <div class="rule-badge gold">24 ครั้งขึ้นไป</div>
+                    <div class="rule-icon">🥈</div>
+                    <h4>บริจาคครบ 24 ครั้งขึ้นไป</h4>
+                    <ul>
+                        <li>สิทธิการช่วยเหลือค่ารักษาพยาบาล (เช่น การยกเว้นค่าห้อง หรือค่ารักษาประเภทผู้ป่วยใน ตามเงื่อนไขสถานพยาบาล)</li>
+                        <li>เข็มเชิดชูเกียรติ ชั้นที่ 24</li>
+                    </ul>
+                </div>
+
+                <div class="rule-card">
+                    <div class="rule-badge">36 ครั้ง</div>
+                    <div class="rule-icon">🥇</div>
+                    <h4>บริจาคครบ 36 ครั้ง</h4>
+                    <ul>
+                        <li>เข็มเชิดชูเกียรติ ชั้นที่ 36</li>
+                    </ul>
+                </div>
+
+                <div class="rule-card">
+                    <div class="rule-badge">50 ครั้ง</div>
+                    <div class="rule-icon">💎</div>
+                    <h4>บริจาคครบ 50 ครั้ง</h4>
+                    <ul>
+                        <li>เข็มเชิดชูเกียรติ ชั้นที่ 50</li>
+                    </ul>
+                </div>
+
+                <div class="rule-card crown">
+                    <div class="rule-badge purple">100 ครั้ง</div>
+                    <div class="rule-icon">👑</div>
+                    <h4>บริจาคครบ 100 ครั้ง</h4>
+                    <ul>
+                        <li>เข็มเชิดชูเกียรติ ชั้นที่ 100</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 6: GUIDELINES -->
+        <section id="tab-guidelines" class="tab-pane">
+            <div class="page-title">
+                <h2>📋 ข้อปฏิบัติและการดูแลตนเอง (Pre & Post Donation Guidelines)</h2>
+                <p>ข้อควรปฏิบัติเพื่อความปลอดภัยของร่างกายและคุณภาพพลาสมาที่ดีที่สุด</p>
+            </div>
+
+            <div class="guidelines-grid">
+                <!-- Pre-donation guidelines -->
+                <div class="glass-card guideline-card danger-border">
+                    <div class="card-header danger-header">
+                        <h3>🚫 สิ่งที่ต้องเตรียมตัวและข้อห้ามก่อนวันบริจาคเลือด</h3>
+                    </div>
+                    <div class="guideline-body">
+                        <div class="g-item">
+                            <div class="g-icon">🛌</div>
+                            <div class="g-info">
+                                <h4>นอนหลับพักผ่อนให้เพียงพอ</h4>
+                                <p>นอนหลับเต็มอิ่มอย่างน้อย <strong>5 ชั่วโมง</strong> ก่อนมาบริจาคเลือด</p>
+                            </div>
+                        </div>
+
+                        <div class="g-item">
+                            <div class="g-icon">🍳</div>
+                            <div class="g-info">
+                                <h4>หลีกเลี่ยงอาหารไขมันสูง (ภายใน 6 ชั่วโมง)</h4>
+                                <p>งดข้าวขาหมู ข้าวมันไก่ แกงกะทิ หรือของทอด <strong>เพราะจะทำให้พลาสมาขาวขุ่น</strong> ไม่สามารถนำไปใช้กับผู้ป่วยได้</p>
+                            </div>
+                        </div>
+
+                        <div class="g-item">
+                            <div class="g-icon">💧</div>
+                            <div class="g-info">
+                                <h4>ดื่มน้ำให้เพียงพอ</h4>
+                                <p>ดื่มน้ำเปล่า <strong>3-4 แก้ว ก่อนบริจาค 30 นาที</strong> ช่วยให้เลือดไหลเวียนดีและป้องกันอาการความดันตก</p>
+                            </div>
+                        </div>
+
+                        <div class="g-item">
+                            <div class="g-icon">🍷</div>
+                            <div class="g-info">
+                                <h4>งดเครื่องดื่มแอลกอฮอล์</h4>
+                                <p>งดเครื่องดื่มแอลกอฮอล์ทุกชนิดอย่างน้อย <strong>24 ชั่วโมง</strong> ก่อนบริจาค</p>
+                            </div>
+                        </div>
+
+                        <div class="g-item">
+                            <div class="g-icon">🚬</div>
+                            <div class="g-info">
+                                <h4>งดสูบบุหรี่</h4>
+                                <p>งดสูบบุหรี่ก่อนและหลังบริจาคเลือดอย่างน้อย <strong>1 ชั่วโมง</strong></p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Post-donation guidelines -->
+                <div class="glass-card guideline-card success-border">
+                    <div class="card-header success-header">
+                        <h3>💚 การดูแลตัวเองหลังจากบริจาคเลือด</h3>
+                    </div>
+                    <div class="guideline-body">
+                        <div class="g-item">
+                            <div class="g-icon">🛋️</div>
+                            <div class="g-info">
+                                <h4>นั่งพักผ่อนบนเตียง</h4>
+                                <p>นอนหรือนั่งพักบนเตียง <strong>5-10 นาที</strong> ห้ามลุกขึ้นทันทีเพื่อป้องกันอาการหน้ามืด เวียนศีรษะ</p>
+                            </div>
+                        </div>
+
+                        <div class="g-item">
+                            <div class="g-icon">🩹</div>
+                            <div class="g-info">
+                                <h4>กดแผลแน่นๆ</h4>
+                                <p>กดพลาสเตอร์ตรงรอยเจาะให้แน่นประมาณ <strong>5-10 นาที</strong> และหลีกเลี่ยงการใช้แขนข้างนั้นยกของหนักในวันนั้น</p>
+                            </div>
+                        </div>
+
+                        <div class="g-item">
+                            <div class="g-icon">🍪</div>
+                            <div class="g-info">
+                                <h4>รับประทานอาหารว่าง & ยาบำรุงเลือด</h4>
+                                <p>ดื่มน้ำ รับประทานขนมว่าง และรับ <strong>ยาธาตุเหล็ก (Iron Supplement)</strong> ที่เจ้าหน้าที่จัดไว้ให้</p>
+                            </div>
+                        </div>
+
+                        <div class="g-item">
+                            <div class="g-icon">🚰</div>
+                            <div class="g-info">
+                                <h4>ดื่มน้ำมากๆ</h4>
+                                <p>พยายามดื่มน้ำเปล่าให้มากกว่าปกติในรอบวันที่บริจาคเลือด เพื่อทดแทนปริมาณน้ำในร่างกาย</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 7: DONORS LIST & DATABASE DIRECTORY -->
+        <section id="tab-donors-list" class="tab-pane">
+            <div class="page-title">
+                <h2>👥 รายชื่อและประวัติผู้บริจาค (Database Directory)</h2>
+                <p>ค้นหา จัดกลุ่มตามหมู่เลือด และเปิดดูประวัติการบริจาคสะสมในระบบฐานข้อมูล SQLite Real-time</p>
+            </div>
+
+            <div class="glass-card">
+                <!-- Filters & Search Bar -->
+                <div class="table-controls">
+                    <div class="search-box">
+                        <input type="text" id="search-input" placeholder="🔍 ค้นหาชื่อ, เลขบัตรประชาชน หรือเบอร์โทรศัพท์...">
+                    </div>
+                    <div class="filter-box">
+                        <select id="filter-blood-type">
+                            <option value="">ทุกหมู่เลือด (All Blood Types)</option>
+                            <option value="O">หมู่ O</option>
+                            <option value="A">หมู่ A</option>
+                            <option value="B">หมู่ B</option>
+                            <option value="AB">หมู่ AB</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Donors Table -->
+                <div class="table-responsive">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>ชื่อ-นามสกุล</th>
+                                <th>อายุ / เพศ</th>
+                                <th>น้ำหนัก</th>
+                                <th>หมู่เลือด</th>
+                                <th>จำนวนบริจาค (`donation_count`)</th>
+                                <th>บริจาคล่าสุด</th>
+                                <th>สถานะสวัสดิการ</th>
+                                <th>การจัดการ</th>
+                            </tr>
+                        </thead>
+                        <tbody id="donors-table-body">
+                            <!-- Dynamic rows -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- DONOR DETAIL MODAL -->
+    <div id="donor-modal" class="modal-overlay hidden">
+        <div class="modal-content glass-card">
+            <button class="modal-close" onclick="closeDonorModal()">&times;</button>
+            <div class="modal-header">
+                <div class="modal-avatar">🩸</div>
+                <div class="modal-donor-title">
+                    <h3 id="modal-name">-</h3>
+                    <p id="modal-id-card">เลขบัตร: -</p>
+                </div>
+            </div>
+
+            <div class="modal-body">
+                <div class="donor-details-grid">
+                    <div class="d-detail-item"><span>อายุ:</span> <strong id="modal-age">-</strong> ปี</div>
+                    <div class="d-detail-item"><span>เพศ:</span> <strong id="modal-gender">-</strong></div>
+                    <div class="d-detail-item"><span>น้ำหนัก:</span> <strong id="modal-weight">-</strong> kg</div>
+                    <div class="d-detail-item"><span>หมู่เลือด:</span> <strong id="modal-blood">-</strong></div>
+                    <div class="d-detail-item"><span>เบอร์โทร:</span> <strong id="modal-phone">-</strong></div>
+                    <div class="d-detail-item"><span>บริจาคสะสม:</span> <strong id="modal-count" class="text-crimson">0</strong> ครั้ง</div>
+                </div>
+
+                <div class="modal-section-title">🏆 เข็มเชิดชูเกียรติ & สวัสดิการที่ได้รับ</div>
+                <div id="modal-milestones-list" class="modal-milestones">
+                    <!-- Dynamic badges -->
+                </div>
+
+                <div class="modal-section-title">📜 ประวัติการบริจาค (Donation Records History)</div>
+                <div class="history-table-container">
+                    <table class="data-table small">
+                        <thead>
+                            <tr>
+                                <th>วันที่บริจาค</th>
+                                <th>ปริมาณ (ml)</th>
+                                <th>บันทึกเพิ่มเติม</th>
+                            </tr>
+                        </thead>
+                        <tbody id="modal-history-body">
+                            <!-- Dynamic history -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeDonorModal()">ปิด</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- SUCCESS NOTIFICATION TOAST -->
+    <div id="toast" class="toast hidden"></div>
+
+    <script src="/static/script.js"></script>
+</body>
+</html>
