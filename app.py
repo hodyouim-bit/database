@@ -109,7 +109,7 @@ def get_donors():
         query += ' AND blood_type = ?'
         params.append(blood_type_filter)
 
-    query += ' ORDER BY donation_count DESC, donor_id DESC'
+    query += ' ORDER BY donor_id ASC'
     cursor.execute(query, params)
     rows = cursor.fetchall()
     conn.close()

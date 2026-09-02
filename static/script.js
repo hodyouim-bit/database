@@ -411,6 +411,8 @@ async function populateDonorSelects() {
         const response = await fetch('/api/donors');
         const data = await response.json();
         if (data && data.donors) {
+            // Sort by donor_id ascending
+            data.donors.sort((a, b) => a.donor_id - b.donor_id);
             allDonorsCache = data.donors;
 
             const recSelect = document.getElementById('rec-donor-select');
@@ -418,7 +420,7 @@ async function populateDonorSelects() {
 
             let optionsHtml = '<option value="">-- กรุณาเลือกผู้บริจาค --</option>';
             data.donors.forEach(d => {
-                optionsHtml += `<option value="${d.donor_id}">${d.name} (หมู่ ${d.blood_type}${d.rh_factor}) - สะสม ${d.donation_count} ครั้ง</option>`;
+                optionsHtml += `<option value="${d.donor_id}">#${d.donor_id} ${d.name} (หมู่ ${d.blood_type}${d.rh_factor}) - สะสม ${d.donation_count} ครั้ง</option>`;
             });
 
             if (recSelect) recSelect.innerHTML = optionsHtml;
@@ -699,7 +701,7 @@ function triggerCertificateFromLookup() {
 }
 
 /* ==========================================================================
-   8. Donors Directory - Grouped by Blood Type
+   8. Donors Directory - Grouped by Blood Type & Sorted ASC by Donor ID
    ========================================================================== */
 function initDonorsDirectory() {
     const searchInput = document.getElementById('search-input');
@@ -727,7 +729,10 @@ async function loadDonorsList(searchQuery = '', bloodTypeFilter = '') {
         const data = await res.json();
 
         if (data && data.donors) {
+            // Sort all donors strictly by donor_id ASC (#1, #2, #3, #4...)
+            data.donors.sort((a, b) => a.donor_id - b.donor_id);
             allDonorsCache = data.donors;
+
             if (data.donors.length === 0) {
                 tableBody.innerHTML = `<tr><td colspan="9" style="text-align: center; color: #94a3b8; padding: 30px;">ไม่พบข้อมูลผู้บริจาคในระบบ</td></tr>`;
                 return;
@@ -744,6 +749,11 @@ async function loadDonorsList(searchQuery = '', bloodTypeFilter = '') {
                     grouped[bType] = [d];
                 }
             });
+
+            // Ensure donors within each blood group are also sorted ASC by donor_id
+            for (const bType of bloodOrder) {
+                grouped[bType].sort((a, b) => a.donor_id - b.donor_id);
+            }
 
             let fullHtml = '';
             const displayGroups = bloodTypeFilter ? [bloodTypeFilter] : bloodOrder;
@@ -782,14 +792,13 @@ async function loadDonorsList(searchQuery = '', bloodTypeFilter = '') {
                             '<span class="ready-badge">✅ พร้อมบริจาค</span>' : 
                             `<span class="wait-badge">⏳ ${next.formatted_date} (${next.days_remaining} วัน)</span>`;
 
-                        // Render action buttons strictly according to currentRole
                         const adminActions = (currentRole === 'admin') ? 
                             `<button class="btn btn-warning btn-sm" onclick="openEditDonorModal(${d.donor_id})" title="แก้ไขข้อมูลผู้บริจาค">✏️ แก้ไข</button>
                              <button class="btn btn-danger btn-sm" onclick="deleteDonor(${d.donor_id})" title="ลบข้อมูลผู้บริจาค">🗑️ ลบ</button>` : '';
 
                         fullHtml += `
                             <tr>
-                                <td>#${d.donor_id}</td>
+                                <td><strong>#${d.donor_id}</strong></td>
                                 <td><strong>${d.name}</strong><br><small style="color:#64748b;">${d.phone}</small></td>
                                 <td>${d.age} ปี / ${d.gender}</td>
                                 <td>${d.weight} kg</td>
