@@ -620,7 +620,7 @@ async function populateDonorSelects() {
 
             let optionsHtml = '<option value="">-- กรุณาเลือกผู้บริจาค --</option>';
             approvedDonors.forEach(d => {
-                optionsHtml += `<option value="${d.donor_id}">#${d.donor_id} ${d.name} (หมู่ ${d.blood_type}${d.rh_factor}) - สะสม ${d.donation_count} ครั้ง</option>`;
+                optionsHtml += `<option value="${d.donor_id}">#${d.donor_id} คุณ${d.name} | เลขบัตรประชาชน: ${d.id_card} | อายุ ${d.age} ปี | เพศ ${d.gender} | (หมู่ ${d.blood_type}${d.rh_factor})</option>`;
             });
 
             if (recSelect) recSelect.innerHTML = optionsHtml;
@@ -641,7 +641,10 @@ function initRecordDonationForm() {
         const donor = allDonorsCache.find(d => d.donor_id === donorId);
 
         if (donor) {
-            document.getElementById('prev-name').textContent = donor.name;
+            document.getElementById('prev-name').textContent = `คุณ${donor.name} (รหัสระบบ #${donor.donor_id})`;
+            if (document.getElementById('prev-idcard')) document.getElementById('prev-idcard').textContent = donor.id_card;
+            if (document.getElementById('prev-age')) document.getElementById('prev-age').textContent = donor.age;
+            if (document.getElementById('prev-gender')) document.getElementById('prev-gender').textContent = donor.gender;
             document.getElementById('prev-blood').textContent = `${donor.blood_type}${donor.rh_factor}`;
             document.getElementById('prev-count').textContent = donor.donation_count;
             document.getElementById('prev-weight').textContent = donor.weight;
