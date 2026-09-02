@@ -732,11 +732,11 @@ async function loadPendingDonors() {
             }
 
             let html = '';
-            data.donors.forEach(d => {
+            data.donors.forEach((d, idx) => {
                 html += `
                     <tr>
-                        <td><strong>#${d.donor_id}</strong></td>
-                        <td><strong>${d.name}</strong></td>
+                        <td><strong>#${idx + 1}</strong></td>
+                        <td><strong>${d.name}</strong><br><small style="color:#64748b;">ID System: #${d.donor_id}</small></td>
                         <td><code>${d.id_card}</code></td>
                         <td>${d.age} ปี / ${d.gender} / ${d.weight} kg</td>
                         <td><span class="blood-badge ${d.blood_type}">${d.blood_type}${d.rh_factor}</span></td>
@@ -979,7 +979,7 @@ function triggerCertificateFromLookup() {
 }
 
 /* ==========================================================================
-   10. Donors Directory - Grouped by Blood Type & Sorted ASC by Donor ID
+   10. Donors Directory - Grouped by Blood Type & Sequentially Numbered (#1, #2...)
    ========================================================================== */
 function initDonorsDirectory() {
     const searchInput = document.getElementById('search-input');
@@ -1053,7 +1053,9 @@ async function loadDonorsList(searchQuery = '', bloodTypeFilter = '') {
                 if (donorsInGroup.length === 0) {
                     fullHtml += `<tr><td colspan="10" style="text-align: center; color: #94a3b8; padding: 12px;">ยังไม่มีผู้บริจาคในกลุ่มหมู่เลือด ${bGroup}</td></tr>`;
                 } else {
-                    donorsInGroup.forEach(d => {
+                    donorsInGroup.forEach((d, idx) => {
+                        const seqNum = idx + 1; // Sequential 1, 2, 3... per group section
+
                         let milestoneBadge = '<span class="badge-benefit">ผู้บริจาคทั่วไป</span>';
                         if (d.donation_count >= 24) {
                             milestoneBadge = '<span class="badge-benefit gold">🏆 สิทธิยกเว้นค่าห้อง/ค่ารักษา (24+)</span>';
@@ -1079,8 +1081,8 @@ async function loadDonorsList(searchQuery = '', bloodTypeFilter = '') {
 
                         fullHtml += `
                             <tr>
-                                <td><strong>#${d.donor_id}</strong></td>
-                                <td><strong>${d.name}</strong><br><small style="color:#64748b;">${d.phone}</small></td>
+                                <td><strong>#${seqNum}</strong></td>
+                                <td><strong>${d.name}</strong><br><small style="color:#64748b;">${d.phone} (ID: #${d.donor_id})</small></td>
                                 <td>${d.age} ปี / ${d.gender}</td>
                                 <td>${d.weight} kg</td>
                                 <td><span class="blood-badge ${d.blood_type}">${d.blood_type}${d.rh_factor}</span></td>
