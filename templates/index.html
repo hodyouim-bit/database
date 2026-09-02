@@ -41,7 +41,7 @@
                     <span>👤 Admin: <strong>6812732101</strong></span>
                     <button onclick="logoutRole()" class="btn-logout" title="ออกจากระบบ Admin">🚪 ออกจากระบบ</button>
                 </div>
-                <button id="open-login-btn" class="btn btn-secondary btn-sm" onclick="openLoginModal()">🔑 เข้าสู่ระบบ</button>
+                <button id="open-login-btn" class="btn btn-secondary btn-sm" onclick="openLoginModal()">🔑 เข้าสู่ระบบ / สมัครสมาชิก</button>
                 <button id="theme-toggle" class="btn btn-icon" title="สลับโหมด มืด/สว่าง">🌙</button>
                 <button id="new-donation-btn" class="btn btn-primary" onclick="switchTab('record')">+ บันทึกบริจาคใหม่</button>
             </div>
@@ -697,24 +697,25 @@
         </section>
     </main>
 
-    <!-- UNIFIED LOGIN MODAL (2 TABS: USER READ-ONLY vs ADMIN) -->
+    <!-- UNIFIED LOGIN & SIGN UP MODAL (3 TABS) -->
     <div id="login-modal" class="modal-overlay hidden">
         <div class="modal-content glass-card login-modal">
             <button class="modal-close" onclick="closeLoginModal()">&times;</button>
             <div class="modal-header">
                 <div class="modal-avatar">🔑</div>
                 <div class="modal-donor-title">
-                    <h3>เข้าสู่ระบบ (Login Center)</h3>
-                    <p>เลือกรอบการเข้าใช้งานตามสิทธิ์บทบาทของคุณ</p>
+                    <h3>ศูนย์บริการเข้าสู่ระบบ & สมัครสมาชิก (Auth Center)</h3>
+                    <p>เลือกแท็บเพื่อเข้าสู่ระบบ หรือสร้างบัญชีผู้บริจาคใหม่</p>
                 </div>
             </div>
             
             <div class="login-tab-toggle">
-                <button id="tab-user-btn" class="login-tab-btn active" onclick="switchLoginTab('user')">👤 ผู้ใช้งานทั่วไป (อ่านอย่างเดียว)</button>
-                <button id="tab-admin-btn" class="login-tab-btn" onclick="switchLoginTab('admin')">🔑 เจ้าหน้าที่ Admin (สิทธิ์เต็ม)</button>
+                <button id="tab-user-btn" class="login-tab-btn active" onclick="switchLoginTab('user')">👤 เข้าสู่ระบบผู้ใช้</button>
+                <button id="tab-signup-btn" class="login-tab-btn" onclick="switchLoginTab('signup')">📝 สมัครสมาชิกใหม่</button>
+                <button id="tab-admin-btn" class="login-tab-btn" onclick="switchLoginTab('admin')">🔑 เจ้าหน้าที่ Admin</button>
             </div>
 
-            <!-- Tab 1: General Read-Only User Form -->
+            <!-- Tab 1: General Read-Only User Login Form -->
             <form id="user-login-form" class="login-subform">
                 <div class="form-group" style="margin-bottom: 15px;">
                     <label for="user-idcard-input">เลขบัตรประชาชน (13 หลัก) หรือ Username <span class="required">*</span></label>
@@ -724,13 +725,67 @@
                     <label for="user-pass-input">รหัสผ่าน <small>(กรณีใช้ user ให้กรอก 1234)</small></label>
                     <input type="password" id="user-pass-input" placeholder="รหัสผ่าน (เช่น 1234)" value="1234">
                 </div>
-                <div class="modal-footer">
-                    <button type="submit" class="btn btn-primary">เข้าสู่ระบบผู้ใช้ทั่วไป (Read-Only)</button>
+                <div class="modal-footer" style="justify-content: space-between; align-items: center;">
+                    <span style="font-size: 0.85rem; color: #64748b;">ยังไม่มีบัญชี? <a href="#" onclick="switchLoginTab('signup'); return false;" style="color:#c62828; font-weight:600;">สมัครสมาชิกที่นี่</a></span>
+                    <div>
+                        <button type="submit" class="btn btn-primary">เข้าสู่ระบบผู้ใช้ทั่วไป</button>
+                        <button type="button" class="btn btn-secondary" onclick="closeLoginModal()">ยกเลิก</button>
+                    </div>
+                </div>
+            </form>
+
+            <!-- Tab 2: User Sign Up Form -->
+            <form id="user-signup-form" class="login-subform hidden">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="signup-id-card">เลขประจำตัวประชาชน <span class="required">* (13 หลัก)</span></label>
+                        <input type="text" id="signup-id-card" placeholder="13 หลัก เช่น 1100100999888" maxlength="13" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="signup-name">ชื่อ-นามสกุล <span class="required">*</span></label>
+                        <input type="text" id="signup-name" placeholder="นาย / นาง / นางสาว..." required>
+                    </div>
+                    <div class="form-group">
+                        <label for="signup-password">ตั้งรหัสผ่าน <span class="required">*</span></label>
+                        <input type="password" id="signup-password" placeholder="กำหนดรหัสผ่าน" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="signup-phone">เบอร์โทรศัพท์ <span class="required">*</span></label>
+                        <input type="tel" id="signup-phone" placeholder="08X-XXX-XXXX" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="signup-blood-type">หมู่เลือด <span class="required">*</span></label>
+                        <select id="signup-blood-type" required>
+                            <option value="O">หมู่ O</option>
+                            <option value="A">หมู่ A</option>
+                            <option value="B">หมู่ B</option>
+                            <option value="AB">หมู่ AB</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="signup-weight">น้ำหนัก (kg) <span class="required">* (>= 45 kg)</span></label>
+                        <input type="number" id="signup-weight" value="55.0" step="0.1" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="signup-age">อายุ (ปี)</label>
+                        <input type="number" id="signup-age" value="25" min="17" max="70" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="signup-gender">เพศ</label>
+                        <select id="signup-gender">
+                            <option value="ชาย">ชาย</option>
+                            <option value="หญิง">หญิง</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="modal-footer" style="margin-top: 20px;">
+                    <button type="submit" class="btn btn-primary">ยืนยันสมัครสมาชิกใหม่</button>
                     <button type="button" class="btn btn-secondary" onclick="closeLoginModal()">ยกเลิก</button>
                 </div>
             </form>
 
-            <!-- Tab 2: Admin Staff Form -->
+            <!-- Tab 3: Admin Staff Form -->
             <form id="admin-login-form" class="login-subform hidden">
                 <div class="form-group" style="margin-bottom: 15px;">
                     <label for="admin-user-input">Username เจ้าหน้าที่ Admin <span class="required">*</span></label>

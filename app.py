@@ -15,6 +15,55 @@ init_db()
 def home():
     return render_template('index.html')
 
+@app.route('/api/signup', methods=['POST'])
+def handle_signup():
+    data = request.json or {}
+    id_card = str(data.get('id_card', '')).strip()
+    name = str(data.get('name', '')).strip()
+    password = str(data.get('password', '')).strip()
+    phone = str(data.get('phone', '')).strip()
+    blood_type = str(data.get('blood_type', 'O')).strip()
+    rh_factor = str(data.get('rh_factor', '+')).strip()
+    age = int(data.get('age', 25))
+    gender = str(data.get('gender', 'ไม่ระบุ')).strip()
+    weight = float(data.get('weight', 55.0))
+    email = str(data.get('email', '')).strip()
+    address = str(data.get('address', '')).strip()
+
+    if not id_card or not name or not password or not phone:
+        return jsonify({'success': False, 'message': 'กรุณากรอกเลขบัตรประชาชน, ชื่อ-นามสกุล, รหัสผ่าน และเบอร์โทรศัพท์ให้ครบถ้วน'}), 400
+
+    if len(id_card) != 13 or not id_card.isdigit():
+        return jsonify({'success': False, 'message': 'เลขประจำตัวประชาชนต้องเป็นตัวเลข 13 หลัก'}), 400
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        initial_status = 'pending'
+        cursor.execute('''
+        INSERT INTO donors (id_card, name, age, gender, weight, blood_type, rh_factor, phone, email, address, donation_count, status, password)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
+        ''', (id_card, name, age, gender, weight, blood_type, rh_factor, phone, email, address, initial_status, password))
+        
+        donor_id = cursor.lastrowid
+        conn.commit()
+
+        cursor.execute('SELECT * FROM donors WHERE donor_id = ?', (donor_id,))
+        created_row = cursor.fetchone()
+        created_donor = Donor.from_row(created_row).to_dict()
+        conn.close()
+
+        return jsonify({
+            'success': True,
+            'message': f'สมัครสมาชิกสำเร็จ! ยินดีต้อนรับคุณ {name} (รอเจ้าหน้าที่ Admin ตรวจสอบและอนุมัติ)',
+            'donor': created_donor
+        }), 201
+
+    except sqlite3.IntegrityError:
+        conn.close()
+        return jsonify({'success': False, 'message': 'เลขบัตรประชาชนนี้ถูกสมัครสมาชิกในระบบไว้แล้ว'}), 400
+
 @app.route('/api/login', methods=['POST'])
 def handle_login():
     data = request.json or {}
@@ -45,8 +94,10 @@ def handle_login():
 
     # 2. General Read-Only User Login Check
     if login_type == 'user' or username == 'user' or id_card:
-        if id_card or len(username) == 13:
-            search_card = id_card or username
+        search_card = id_card or username
+
+        # Option A: Login via Donor ID Card (13 digits)
+        if len(search_card) == 13:
             conn = get_db_connection()
             cursor = conn.cursor()
             cursor.execute('SELECT * FROM donors WHERE id_card = ?', (search_card,))
@@ -55,6 +106,11 @@ def handle_login():
 
             if row:
                 donor = Donor.from_row(row)
+                stored_pass = donor.password or '1234'
+
+                if password and password != stored_pass and stored_pass != '1234':
+                    return jsonify({'success': False, 'message': 'รหัสผ่านผู้ใช้ไม่ถูกต้อง'}), 401
+
                 return jsonify({
                     'success': True,
                     'message': f'เข้าสู่ระบบในฐานะผู้บริจาคคุณ {donor.name} (อ่านได้อย่างเดียว)',
@@ -68,6 +124,7 @@ def handle_login():
                     }
                 })
 
+        # Option B: General Demo User (user / 1234)
         if (username == 'user' or not username) and (password == '1234' or not password):
             return jsonify({
                 'success': True,
@@ -269,6 +326,7 @@ def register_donor():
     phone = data.get('phone', '').strip()
     email = data.get('email', '').strip()
     address = data.get('address', '').strip()
+    password = data.get('password', '').strip()
 
     if not id_card or not name or not phone:
         return jsonify({'success': False, 'message': 'กรุณากรอกเลขบัตรประชาชน ชื่อ-นามสกุล และเบอร์โทรศัพท์'}), 400
@@ -292,12 +350,11 @@ def register_donor():
     cursor = conn.cursor()
 
     try:
-        # Default status for new registrations is 'pending' for Admin verification
         initial_status = 'pending'
         cursor.execute('''
-        INSERT INTO donors (id_card, name, age, gender, weight, blood_type, rh_factor, phone, email, address, donation_count, status)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
-        ''', (id_card, name, age, gender, weight, blood_type, rh_factor, phone, email, address, initial_status))
+        INSERT INTO donors (id_card, name, age, gender, weight, blood_type, rh_factor, phone, email, address, donation_count, status, password)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
+        ''', (id_card, name, age, gender, weight, blood_type, rh_factor, phone, email, address, initial_status, password or '1234'))
         
         donor_id = cursor.lastrowid
         

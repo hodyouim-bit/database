@@ -8,6 +8,7 @@ let currentRole = 'guest'; // 'guest', 'user' (read-only), 'admin'
 document.addEventListener('DOMContentLoaded', () => {
     initThemeToggle();
     initRoleAuth();
+    initSignUpForm();
     initTabNavigation();
     initQuickEligibilityChecker();
     initRegistrationForm();
@@ -115,6 +116,73 @@ function initRoleAuth() {
     }
 }
 
+function initSignUpForm() {
+    const signupForm = document.getElementById('user-signup-form');
+    if (!signupForm) return;
+
+    signupForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        const idCard = document.getElementById('signup-id-card').value.trim();
+        const name = document.getElementById('signup-name').value.trim();
+        const password = document.getElementById('signup-password').value.trim();
+        const phone = document.getElementById('signup-phone').value.trim();
+        const bloodType = document.getElementById('signup-blood-type').value;
+        const weight = parseFloat(document.getElementById('signup-weight').value);
+        const age = parseInt(document.getElementById('signup-age').value);
+        const gender = document.getElementById('signup-gender').value;
+
+        if (idCard.length !== 13) {
+            showToast('⚠️ เลขประจำตัวประชาชนต้องเป็นตัวเลข 13 หลัก');
+            return;
+        }
+
+        if (weight < 45.0) {
+            showToast('⚠️ น้ำหนักตัวต้องไม่น้อยกว่า 45 กิโลกรัม');
+            return;
+        }
+
+        const payload = {
+            id_card: idCard,
+            name: name,
+            password: password,
+            phone: phone,
+            blood_type: bloodType,
+            weight: weight,
+            age: age,
+            gender: gender
+        };
+
+        try {
+            const res = await fetch('/api/signup', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            const data = await res.json();
+            if (res.ok && data.success) {
+                showToast(`🎉 ${data.message}`);
+                signupForm.reset();
+                
+                // Pre-fill login form and switch to user login tab
+                document.getElementById('user-idcard-input').value = idCard;
+                document.getElementById('user-pass-input').value = password;
+                switchLoginTab('user');
+
+                loadDashboardStats();
+                loadPendingDonors();
+                loadDonorsList();
+            } else {
+                showToast(`❌ ${data.message || 'เกิดข้อผิดพลาดในการสมัครสมาชิก'}`);
+            }
+        } catch (err) {
+            console.error('Sign up error:', err);
+            showToast('❌ เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์');
+        }
+    });
+}
+
 function setRoleState(role, displayName = '') {
     currentRole = role;
     const loginBtn = document.getElementById('open-login-btn');
@@ -152,20 +220,30 @@ function closeLoginModal() {
 
 function switchLoginTab(tabType) {
     const userBtn = document.getElementById('tab-user-btn');
+    const signupBtn = document.getElementById('tab-signup-btn');
     const adminBtn = document.getElementById('tab-admin-btn');
+    
     const userForm = document.getElementById('user-login-form');
+    const signupForm = document.getElementById('user-signup-form');
     const adminForm = document.getElementById('admin-login-form');
 
-    if (tabType === 'user') {
-        userBtn.classList.add('active');
-        adminBtn.classList.remove('active');
-        userForm.classList.remove('hidden');
-        adminForm.classList.add('hidden');
-    } else {
+    userBtn.classList.remove('active');
+    signupBtn.classList.remove('active');
+    adminBtn.classList.remove('active');
+
+    userForm.classList.add('hidden');
+    signupForm.classList.add('hidden');
+    adminForm.classList.add('hidden');
+
+    if (tabType === 'signup') {
+        signupBtn.classList.add('active');
+        signupForm.classList.remove('hidden');
+    } else if (tabType === 'admin') {
         adminBtn.classList.add('active');
-        userBtn.classList.remove('active');
         adminForm.classList.remove('hidden');
-        userForm.classList.add('hidden');
+    } else {
+        userBtn.classList.add('active');
+        userForm.classList.remove('hidden');
     }
 }
 
@@ -432,7 +510,6 @@ async function populateDonorSelects() {
         const response = await fetch('/api/donors');
         const data = await response.json();
         if (data && data.donors) {
-            // Filter to only approved donors for active donation recording
             const approvedDonors = data.donors.filter(d => d.status === 'approved');
             approvedDonors.sort((a, b) => a.donor_id - b.donor_id);
             allDonorsCache = data.donors;
@@ -829,7 +906,6 @@ async function loadDonorsList(searchQuery = '', bloodTypeFilter = '') {
         const data = await res.json();
 
         if (data && data.donors) {
-            // Sort all donors strictly by donor_id ASC (#1, #2, #3, #4...)
             data.donors.sort((a, b) => a.donor_id - b.donor_id);
             allDonorsCache = data.donors;
 
