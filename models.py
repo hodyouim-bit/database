@@ -1,10 +1,25 @@
 import sqlite3
 import os
+import shutil
 from datetime import datetime, timedelta
 
-DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'blood_donation.db')
+# Handle Vercel serverless environment writable directory (/tmp)
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+ORIGINAL_DB_PATH = os.path.join(BASE_DIR, 'blood_donation.db')
+
+if os.environ.get('VERCEL') or os.environ.get('AWS_LAMBDA_FUNCTION_NAME'):
+    DB_PATH = '/tmp/blood_donation.db'
+    if not os.path.exists(DB_PATH) and os.path.exists(ORIGINAL_DB_PATH):
+        try:
+            shutil.copy2(ORIGINAL_DB_PATH, DB_PATH)
+        except Exception:
+            pass
+else:
+    DB_PATH = ORIGINAL_DB_PATH
 
 def get_db_connection():
+    # Ensure directory exists if needed
+    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
