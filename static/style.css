@@ -69,6 +69,16 @@ body {
     vertical-align: middle;
 }
 
+.badge-count {
+    background: #ef4444;
+    color: #ffffff;
+    font-size: 0.75rem;
+    padding: 2px 6px;
+    border-radius: 10px;
+    margin-left: 4px;
+    font-weight: 700;
+}
+
 /* App Header */
 .app-header {
     position: sticky;
@@ -180,6 +190,51 @@ body {
     background: var(--card-bg);
     color: var(--primary-crimson);
     box-shadow: var(--shadow-sm);
+}
+
+/* Status Badges */
+.status-badge {
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 3px 10px;
+    border-radius: 12px;
+    display: inline-block;
+}
+
+.status-pending {
+    background: #fef3c7;
+    color: #b45309;
+    border: 1px solid #f59e0b;
+}
+
+.status-approved {
+    background: #d1fae5;
+    color: #065f46;
+    border: 1px solid #34d399;
+}
+
+.status-rejected {
+    background: #fee2e2;
+    color: #991b1b;
+    border: 1px solid #f87171;
+}
+
+.btn-approve {
+    background: #10b981;
+    color: #ffffff;
+}
+
+.btn-approve:hover {
+    background: #059669;
+}
+
+.btn-reject {
+    background: #ef4444;
+    color: #ffffff;
+}
+
+.btn-reject:hover {
+    background: #dc2626;
 }
 
 /* Navigation Links */

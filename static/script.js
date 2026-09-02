@@ -20,6 +20,7 @@ document.addEventListener('DOMContentLoaded', () => {
     loadDashboardStats();
     loadBloodInventory();
     loadDonorsList();
+    loadPendingDonors();
     populateDonorSelects();
 
     const recDateInput = document.getElementById('rec-date');
@@ -102,6 +103,7 @@ function initRoleAuth() {
                     closeLoginModal();
                     showToast(`🔑 ${data.message}`);
                     loadDonorsList();
+                    loadPendingDonors();
                 } else {
                     showToast(`❌ ${data.message || 'ชื่อผู้ใช้หรือรหัสผ่าน Admin ไม่ถูกต้อง'}`);
                 }
@@ -119,20 +121,24 @@ function setRoleState(role, displayName = '') {
     const userBadge = document.getElementById('user-status-badge');
     const adminBadge = document.getElementById('admin-status-badge');
     const nameSpan = document.getElementById('user-display-name');
+    const pendingCard = document.getElementById('pending-approval-card');
 
     if (role === 'admin') {
         if (loginBtn) loginBtn.classList.add('hidden');
         if (userBadge) userBadge.classList.add('hidden');
         if (adminBadge) adminBadge.classList.remove('hidden');
+        if (pendingCard) pendingCard.classList.remove('hidden');
     } else if (role === 'user') {
         if (loginBtn) loginBtn.classList.add('hidden');
         if (adminBadge) adminBadge.classList.add('hidden');
         if (userBadge) userBadge.classList.remove('hidden');
+        if (pendingCard) pendingCard.classList.add('hidden');
         if (nameSpan) nameSpan.textContent = displayName || 'ผู้ใช้งานทั่วไป';
     } else {
         if (loginBtn) loginBtn.classList.remove('hidden');
         if (userBadge) userBadge.classList.add('hidden');
         if (adminBadge) adminBadge.classList.add('hidden');
+        if (pendingCard) pendingCard.classList.add('hidden');
     }
 }
 
@@ -169,6 +175,7 @@ function logoutRole() {
     setRoleState('guest');
     showToast('👋 ออกจากระบบเรียบร้อยแล้ว');
     loadDonorsList();
+    loadPendingDonors();
 }
 
 /* ==========================================================================
@@ -215,7 +222,10 @@ function switchTab(tabId) {
 
     if (tabId === 'dashboard') loadDashboardStats();
     if (tabId === 'inventory') loadBloodInventory();
-    if (tabId === 'donors-list') loadDonorsList();
+    if (tabId === 'donors-list') {
+        loadDonorsList();
+        loadPendingDonors();
+    }
     if (tabId === 'record' || tabId === 'milestones') populateDonorSelects();
 }
 
@@ -231,6 +241,16 @@ async function loadDashboardStats() {
             document.getElementById('stat-total-donations').textContent = data.total_donations || 0;
             document.getElementById('stat-total-volume').textContent = (data.total_volume_liters || 0) + ' L';
             document.getElementById('stat-milestone-24').textContent = data.milestones_achieved?.count_24 || 0;
+            
+            const pendingNavBadge = document.getElementById('nav-pending-badge');
+            if (pendingNavBadge) {
+                if (data.pending_count > 0) {
+                    pendingNavBadge.textContent = data.pending_count;
+                    pendingNavBadge.classList.remove('hidden');
+                } else {
+                    pendingNavBadge.classList.add('hidden');
+                }
+            }
         }
     } catch (err) {
         console.error('Error loading dashboard stats:', err);
@@ -389,9 +409,10 @@ function initRegistrationForm() {
             const data = await res.json();
 
             if (res.ok && data.success) {
-                showToast(`🎉 ลงทะเบียนสำเร็จ! ยินดีต้อนรับคุณ ${data.donor.name}`);
+                showToast(`📝 บันทึกลงทะเบียนเรียบร้อยแล้ว รอเจ้าหน้าที่ Admin ตรวจสอบและยืนยันข้อมูล`);
                 regForm.reset();
                 loadDashboardStats();
+                loadPendingDonors();
                 populateDonorSelects();
                 switchTab('donors-list');
             } else {
@@ -411,15 +432,16 @@ async function populateDonorSelects() {
         const response = await fetch('/api/donors');
         const data = await response.json();
         if (data && data.donors) {
-            // Sort by donor_id ascending
-            data.donors.sort((a, b) => a.donor_id - b.donor_id);
+            // Filter to only approved donors for active donation recording
+            const approvedDonors = data.donors.filter(d => d.status === 'approved');
+            approvedDonors.sort((a, b) => a.donor_id - b.donor_id);
             allDonorsCache = data.donors;
 
             const recSelect = document.getElementById('rec-donor-select');
             const lookupSelect = document.getElementById('lookup-donor-select');
 
             let optionsHtml = '<option value="">-- กรุณาเลือกผู้บริจาค --</option>';
-            data.donors.forEach(d => {
+            approvedDonors.forEach(d => {
                 optionsHtml += `<option value="${d.donor_id}">#${d.donor_id} ${d.name} (หมู่ ${d.blood_type}${d.rh_factor}) - สะสม ${d.donation_count} ครั้ง</option>`;
             });
 
@@ -515,7 +537,83 @@ function initRecordDonationForm() {
 }
 
 /* ==========================================================================
-   6. Edit Donor Form & Admin Actions
+   6. Pending Registrations & Admin Approvals
+   ========================================================================== */
+async function loadPendingDonors() {
+    const tableBody = document.getElementById('pending-donors-table-body');
+    if (!tableBody) return;
+
+    try {
+        const res = await fetch('/api/donors/pending');
+        const data = await res.json();
+
+        if (data && data.donors) {
+            if (data.donors.length === 0) {
+                tableBody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: #94a3b8; padding: 15px;">ไม่มีรายการที่รอการตรวจสอบในขณะนี้</td></tr>`;
+                return;
+            }
+
+            let html = '';
+            data.donors.forEach(d => {
+                html += `
+                    <tr>
+                        <td><strong>#${d.donor_id}</strong></td>
+                        <td><strong>${d.name}</strong></td>
+                        <td><code>${d.id_card}</code></td>
+                        <td>${d.age} ปี / ${d.gender} / ${d.weight} kg</td>
+                        <td><span class="blood-badge ${d.blood_type}">${d.blood_type}${d.rh_factor}</span></td>
+                        <td>${d.phone}</td>
+                        <td><span class="status-badge status-pending">⏳ รอตรวจสอบ</span></td>
+                        <td>
+                            <div style="display:flex; gap:6px;">
+                                <button class="btn btn-warning btn-sm" onclick="openEditDonorModal(${d.donor_id})" title="ตรวจสอบ/แก้ไขข้อมูล">✏️ ตรวจสอบ/แก้ไข</button>
+                                <button class="btn btn-approve btn-sm" onclick="verifyDonor(${d.donor_id}, 'approve')" title="อนุมัติข้อมูล">✅ อนุมัติ</button>
+                                <button class="btn btn-reject btn-sm" onclick="verifyDonor(${d.donor_id}, 'reject')" title="ปฏิเสธการลงทะเบียน">❌ ปฏิเสธ</button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            });
+
+            tableBody.innerHTML = html;
+        }
+    } catch (err) {
+        console.error('Error loading pending donors:', err);
+    }
+}
+
+async function verifyDonor(donorId, action) {
+    if (currentRole !== 'admin') {
+        showToast('⚠️ สิทธิ์ไม่เพียงพอ: เฉพาะเจ้าหน้าที่ Admin เท่านั้นที่สามารถอนุมัติได้');
+        return;
+    }
+
+    try {
+        const res = await fetch(`/api/donors/${donorId}/verify`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: action })
+        });
+
+        const data = await res.json();
+        if (res.ok && data.success) {
+            showToast(`✅ ${data.message}`);
+            loadDashboardStats();
+            loadBloodInventory();
+            loadPendingDonors();
+            populateDonorSelects();
+            loadDonorsList();
+        } else {
+            showToast(`❌ ${data.message || 'ไม่สามารถทำรายการได้'}`);
+        }
+    } catch (err) {
+        console.error('Error verifying donor:', err);
+        showToast('❌ เกิดข้อผิดพลาดในการเชื่อมต่อ');
+    }
+}
+
+/* ==========================================================================
+   7. Edit Donor Form & Admin Actions
    ========================================================================== */
 function initEditDonorForm() {
     const editForm = document.getElementById('edit-donor-form');
@@ -563,6 +661,7 @@ function initEditDonorForm() {
                 closeDonorModal();
                 loadDashboardStats();
                 loadBloodInventory();
+                loadPendingDonors();
                 populateDonorSelects();
                 loadDonorsList();
             } else {
@@ -630,6 +729,7 @@ async function deleteDonor(donorId) {
             closeDonorModal();
             loadDashboardStats();
             loadBloodInventory();
+            loadPendingDonors();
             populateDonorSelects();
             loadDonorsList();
         } else {
@@ -646,7 +746,7 @@ function deleteDonorFromDetail() {
 }
 
 /* ==========================================================================
-   7. Milestone Lookup
+   8. Milestone Lookup
    ========================================================================== */
 function initMilestoneLookup() {
     const lookupSelect = document.getElementById('lookup-donor-select');
@@ -701,7 +801,7 @@ function triggerCertificateFromLookup() {
 }
 
 /* ==========================================================================
-   8. Donors Directory - Grouped by Blood Type & Sorted ASC by Donor ID
+   9. Donors Directory - Grouped by Blood Type & Sorted ASC by Donor ID
    ========================================================================== */
 function initDonorsDirectory() {
     const searchInput = document.getElementById('search-input');
@@ -734,7 +834,7 @@ async function loadDonorsList(searchQuery = '', bloodTypeFilter = '') {
             allDonorsCache = data.donors;
 
             if (data.donors.length === 0) {
-                tableBody.innerHTML = `<tr><td colspan="9" style="text-align: center; color: #94a3b8; padding: 30px;">ไม่พบข้อมูลผู้บริจาคในระบบ</td></tr>`;
+                tableBody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: #94a3b8; padding: 30px;">ไม่พบข้อมูลผู้บริจาคในระบบ</td></tr>`;
                 return;
             }
 
@@ -750,7 +850,6 @@ async function loadDonorsList(searchQuery = '', bloodTypeFilter = '') {
                 }
             });
 
-            // Ensure donors within each blood group are also sorted ASC by donor_id
             for (const bType of bloodOrder) {
                 grouped[bType].sort((a, b) => a.donor_id - b.donor_id);
             }
@@ -764,7 +863,7 @@ async function loadDonorsList(searchQuery = '', bloodTypeFilter = '') {
 
                 fullHtml += `
                     <tr class="blood-group-header-row">
-                        <td colspan="9">
+                        <td colspan="10">
                             <div class="blood-group-header">
                                 <span class="blood-badge ${bGroup}">หมู่ ${bGroup}</span>
                                 <strong>กลุ่มผู้บริจาคหมู่เลือด ${bGroup}</strong>
@@ -775,7 +874,7 @@ async function loadDonorsList(searchQuery = '', bloodTypeFilter = '') {
                 `;
 
                 if (donorsInGroup.length === 0) {
-                    fullHtml += `<tr><td colspan="9" style="text-align: center; color: #94a3b8; padding: 12px;">ยังไม่มีผู้บริจาคในกลุ่มหมู่เลือด ${bGroup}</td></tr>`;
+                    fullHtml += `<tr><td colspan="10" style="text-align: center; color: #94a3b8; padding: 12px;">ยังไม่มีผู้บริจาคในกลุ่มหมู่เลือด ${bGroup}</td></tr>`;
                 } else {
                     donorsInGroup.forEach(d => {
                         let milestoneBadge = '<span class="badge-benefit">ผู้บริจาคทั่วไป</span>';
@@ -792,8 +891,13 @@ async function loadDonorsList(searchQuery = '', bloodTypeFilter = '') {
                             '<span class="ready-badge">✅ พร้อมบริจาค</span>' : 
                             `<span class="wait-badge">⏳ ${next.formatted_date} (${next.days_remaining} วัน)</span>`;
 
+                        const statusTag = d.status === 'pending' ?
+                            '<span class="status-badge status-pending">⏳ รอตรวจสอบ</span>' :
+                            (d.status === 'rejected' ? '<span class="status-badge status-rejected">❌ ปฏิเสธ</span>' : '<span class="status-badge status-approved">✅ อนุมัติแล้ว</span>');
+
                         const adminActions = (currentRole === 'admin') ? 
                             `<button class="btn btn-warning btn-sm" onclick="openEditDonorModal(${d.donor_id})" title="แก้ไขข้อมูลผู้บริจาค">✏️ แก้ไข</button>
+                             ${d.status === 'pending' ? `<button class="btn btn-approve btn-sm" onclick="verifyDonor(${d.donor_id}, 'approve')" title="อนุมัติการลงทะเบียน">✅ อนุมัติ</button>` : ''}
                              <button class="btn btn-danger btn-sm" onclick="deleteDonor(${d.donor_id})" title="ลบข้อมูลผู้บริจาค">🗑️ ลบ</button>` : '';
 
                         fullHtml += `
@@ -803,6 +907,7 @@ async function loadDonorsList(searchQuery = '', bloodTypeFilter = '') {
                                 <td>${d.age} ปี / ${d.gender}</td>
                                 <td>${d.weight} kg</td>
                                 <td><span class="blood-badge ${d.blood_type}">${d.blood_type}${d.rh_factor}</span></td>
+                                <td>${statusTag}</td>
                                 <td><strong class="text-crimson" style="font-size:1.05rem;">${d.donation_count}</strong> ครั้ง</td>
                                 <td>${readyBadge}</td>
                                 <td>${milestoneBadge}</td>
@@ -826,7 +931,7 @@ async function loadDonorsList(searchQuery = '', bloodTypeFilter = '') {
 }
 
 /* ==========================================================================
-   9. Modals: Detail, Digital Card, Certificate
+   10. Modals: Detail, Digital Card, Certificate
    ========================================================================== */
 async function openDonorModal(donorId) {
     activeModalDonorId = donorId;
@@ -954,7 +1059,7 @@ function closeCertificateModal() {
 }
 
 /* ==========================================================================
-   10. Toast Notification System
+   11. Toast Notification System
    ========================================================================== */
 function showToast(message) {
     const toast = document.getElementById('toast');

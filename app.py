@@ -45,7 +45,6 @@ def handle_login():
 
     # 2. General Read-Only User Login Check
     if login_type == 'user' or username == 'user' or id_card:
-        # Option A: Login via Donor ID Card (13 digits)
         if id_card or len(username) == 13:
             search_card = id_card or username
             conn = get_db_connection()
@@ -69,7 +68,6 @@ def handle_login():
                     }
                 })
 
-        # Option B: General Demo User (user / 1234)
         if (username == 'user' or not username) and (password == '1234' or not password):
             return jsonify({
                 'success': True,
@@ -94,6 +92,7 @@ def handle_login():
 def get_donors():
     search_q = request.args.get('q', '').strip()
     blood_type_filter = request.args.get('blood_type', '').strip()
+    status_filter = request.args.get('status', '').strip()
 
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -109,6 +108,10 @@ def get_donors():
         query += ' AND blood_type = ?'
         params.append(blood_type_filter)
 
+    if status_filter:
+        query += ' AND status = ?'
+        params.append(status_filter)
+
     query += ' ORDER BY donor_id ASC'
     cursor.execute(query, params)
     rows = cursor.fetchall()
@@ -116,6 +119,44 @@ def get_donors():
 
     donors = [Donor.from_row(r).to_dict() for r in rows]
     return jsonify({'success': True, 'count': len(donors), 'donors': donors})
+
+@app.route('/api/donors/pending', methods=['GET'])
+def get_pending_donors():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM donors WHERE status = 'pending' ORDER BY donor_id ASC")
+    rows = cursor.fetchall()
+    conn.close()
+
+    donors = [Donor.from_row(r).to_dict() for r in rows]
+    return jsonify({'success': True, 'count': len(donors), 'donors': donors})
+
+@app.route('/api/donors/<int:donor_id>/verify', methods=['PUT'])
+def verify_donor(donor_id):
+    data = request.json or {}
+    action = data.get('action', 'approve') # 'approve' or 'reject'
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('SELECT * FROM donors WHERE donor_id = ?', (donor_id,))
+    row = cursor.fetchone()
+
+    if not row:
+        conn.close()
+        return jsonify({'success': False, 'message': 'ไม่พบข้อมูลผู้บริจาคในระบบ'}), 404
+
+    donor = Donor.from_row(row)
+    new_status = 'approved' if action == 'approve' else 'rejected'
+    donor.set_status(conn, new_status)
+    conn.close()
+
+    msg = f"อนุมัติข้อมูลผู้บริจาคคุณ {donor.name} เรียบร้อยแล้ว" if new_status == 'approved' else f"ปฏิเสธข้อมูลผู้บริจาคคุณ {donor.name} แล้ว"
+
+    return jsonify({
+        'success': True,
+        'message': msg,
+        'donor': donor.to_dict()
+    })
 
 @app.route('/api/donors/<int:donor_id>', methods=['GET'])
 def get_donor_detail(donor_id):
@@ -251,10 +292,12 @@ def register_donor():
     cursor = conn.cursor()
 
     try:
+        # Default status for new registrations is 'pending' for Admin verification
+        initial_status = 'pending'
         cursor.execute('''
-        INSERT INTO donors (id_card, name, age, gender, weight, blood_type, rh_factor, phone, email, address, donation_count)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
-        ''', (id_card, name, age, gender, weight, blood_type, rh_factor, phone, email, address))
+        INSERT INTO donors (id_card, name, age, gender, weight, blood_type, rh_factor, phone, email, address, donation_count, status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
+        ''', (id_card, name, age, gender, weight, blood_type, rh_factor, phone, email, address, initial_status))
         
         donor_id = cursor.lastrowid
         
@@ -277,7 +320,7 @@ def register_donor():
 
         return jsonify({
             'success': True,
-            'message': 'ลงทะเบียนผู้บริจาคสำเร็จ',
+            'message': 'ลงทะเบียนเรียบร้อยแล้ว (รอเจ้าหน้าที่ Admin ตรวจสอบและยืนยันข้อมูล)',
             'is_eligible_today': is_eligible,
             'eligibility_reasons': reasons,
             'donor': created_donor
@@ -387,12 +430,16 @@ def get_stats():
     cursor.execute('SELECT COUNT(*) FROM donors WHERE donation_count >= 24')
     milestone_24 = cursor.fetchone()[0]
 
+    cursor.execute("SELECT COUNT(*) FROM donors WHERE status = 'pending'")
+    pending_count = cursor.fetchone()[0]
+
     conn.close()
 
     return jsonify({
         'total_donors': total_donors,
         'total_donations': total_donations,
         'total_volume_liters': round(total_volume_ml / 1000.0, 1),
+        'pending_count': pending_count,
         'blood_groups': blood_groups,
         'inventory': inventory,
         'milestones_achieved': {

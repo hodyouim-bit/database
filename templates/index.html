@@ -29,7 +29,7 @@
                 <button class="nav-btn" data-tab="record">💉 บันทึกการบริจาค</button>
                 <button class="nav-btn" data-tab="milestones">🏆 สวัสดิการ & เข็มเชิดชูเกียรติ</button>
                 <button class="nav-btn" data-tab="guidelines">📋 ข้อปฏิบัติก่อน-หลัง</button>
-                <button class="nav-btn" data-tab="donors-list">👥 รายชื่อผู้บริจาค</button>
+                <button class="nav-btn" data-tab="donors-list">👥 รายชื่อผู้บริจาค <span id="nav-pending-badge" class="badge-count hidden">0</span></button>
             </nav>
             <div class="header-actions">
                 <!-- User Status Badges -->
@@ -138,7 +138,7 @@
                             </label>
                             <label class="checkbox-card">
                                 <input type="checkbox" id="chk-smoking" checked>
-                                <span>🚬 งดสูบบุหรี่ก่อนมาอย่างน้อย 1 ชั่วโมง</span>
+                                <span>🚬 งดสูบบุหรี่ก่อนและหลังบริจาคอย่างน้อย 1 ชั่วโมง</span>
                             </label>
                         </div>
 
@@ -295,7 +295,7 @@
                     </div>
 
                     <div class="form-actions">
-                        <button type="submit" class="btn btn-primary btn-lg">บันทึกการลงทะเบียน</button>
+                        <button type="submit" class="btn btn-primary btn-lg">บันทึกการลงทะเบียน (ส่งให้ Admin อนุมัติ)</button>
                     </div>
                 </form>
             </div>
@@ -494,7 +494,7 @@
                     <div class="rule-icon">🥈</div>
                     <h4>บริจาคครบ 24 ครั้งขึ้นไป</h4>
                     <ul>
-                        <li>สิทธิการช่วยเหลือค่ารักษาพยาบาล (เช่น การยกเว้นค่าห้อง หรือค่ารักษาประเภทผู้ป่วยใน ตามเงื่อนไขสถานพยาบาล)</li>
+                        <li>สิทธิการช่วยเหลือค่ารักษาพยาบาล (เช่น ยกเว้นค่าห้อง หรือค่ารักษาประเภทผู้ป่วยใน ตามเงื่อนไขสถานพยาบาลที่เข้าร่วม)</li>
                         <li>เข็มเชิดชูเกียรติ ชั้นที่ 24</li>
                     </ul>
                 </div>
@@ -631,6 +631,32 @@
                 <p>ค้นหา จัดกลุ่มตามหมวดหมู่เลือด วันพร้อมบริจาคครั้งถัดไป และสิทธิประโยชน์ในระบบฐานข้อมูล SQLite</p>
             </div>
 
+            <!-- Admin Verification Panel for Pending Registrations -->
+            <div id="pending-approval-card" class="glass-card margin-bottom-25 admin-only hidden" style="border-left: 5px solid #f59e0b;">
+                <div class="card-header">
+                    <h3 style="color: #d97706;">⏳ รายการรอตรวจสอบและอนุมัติลงทะเบียน (Pending Registrations)</h3>
+                </div>
+                <div class="table-responsive">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>ชื่อ-นามสกุล</th>
+                                <th>เลขบัตรประชาชน</th>
+                                <th>อายุ / เพศ / น้ำหนัก</th>
+                                <th>หมู่เลือด</th>
+                                <th>เบอร์โทร</th>
+                                <th>สถานะ</th>
+                                <th>การอนุมัติ (Admin Actions)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="pending-donors-table-body">
+                            <tr><td colspan="8" style="text-align: center; color: #94a3b8; padding: 15px;">ไม่มีรายการที่รอการตรวจสอบในขณะนี้</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
             <div class="glass-card">
                 <div class="table-controls">
                     <div class="search-box">
@@ -656,7 +682,8 @@
                                 <th>อายุ / เพศ</th>
                                 <th>น้ำหนัก</th>
                                 <th>หมู่เลือด</th>
-                                <th>จำนวนบริจาค (`donation_count`)</th>
+                                <th>สถานะอนุมัติ</th>
+                                <th>บริจาคสะสม</th>
                                 <th>พร้อมบริจาคถัดไป (90 วัน)</th>
                                 <th>สถานะสวัสดิการ</th>
                                 <th>การจัดการ</th>
@@ -682,7 +709,6 @@
                 </div>
             </div>
             
-            <!-- Login Tabs Toggle -->
             <div class="login-tab-toggle">
                 <button id="tab-user-btn" class="login-tab-btn active" onclick="switchLoginTab('user')">👤 ผู้ใช้งานทั่วไป (อ่านอย่างเดียว)</button>
                 <button id="tab-admin-btn" class="login-tab-btn" onclick="switchLoginTab('admin')">🔑 เจ้าหน้าที่ Admin (สิทธิ์เต็ม)</button>
@@ -729,7 +755,7 @@
             <div class="modal-header">
                 <div class="modal-avatar">✏️</div>
                 <div class="modal-donor-title">
-                    <h3>แก้ไขข้อมูลผู้บริจาค (Admin Mode)</h3>
+                    <h3>ตรวจสอบและแก้ไขข้อมูลผู้บริจาค (Admin Mode)</h3>
                     <p id="edit-donor-subtitle">รหัสผู้บริจาค: # -</p>
                 </div>
             </div>

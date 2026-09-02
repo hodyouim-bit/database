@@ -29,9 +29,16 @@ def init_db():
         address TEXT,
         donation_count INTEGER NOT NULL DEFAULT 0,
         last_donation_date TEXT,
+        status TEXT DEFAULT 'approved',
         created_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
     ''')
+
+    # Migration: Ensure 'status' column exists if DB was created earlier
+    try:
+        cursor.execute("ALTER TABLE donors ADD COLUMN status TEXT DEFAULT 'approved'")
+    except sqlite3.OperationalError:
+        pass # Column already exists
 
     # Create Donation History Table
     cursor.execute('''
@@ -77,21 +84,20 @@ def init_db():
 def seed_sample_data(conn):
     cursor = conn.cursor()
     sample_donors = [
-        ('1100100234567', 'สมชาย รักชาติ', 28, 'ชาย', 68.5, 'O', '+', '081-234-5678', 'somchai@email.com', '123 ถ.สุขุมวิท กรุงเทพฯ', 6, '2026-05-10'),
-        ('1100200345678', 'กานดา มีสุข', 32, 'หญิง', 52.0, 'A', '+', '089-876-5432', 'kanda@email.com', '45/1 ถ.แจ้งวัฒนะ นนทบุรี', 23, '2026-04-15'),
-        ('1100300456789', 'ธนกร รัตนสว่าง', 45, 'ชาย', 75.0, 'B', '+', '086-555-1234', 'tanakorn@email.com', '88/2 ถ.มิตรภาพ โคราช', 49, '2026-03-20'),
-        ('1100400567890', 'ปรียาพร พรหมดี', 22, 'หญิง', 48.0, 'AB', '-', '092-333-4455', 'preeyaporn@email.com', '12 หมู่ 4 จ.เชียงใหม่', 0, None),
-        ('1100500678901', 'วิทวัส เจริญผล', 50, 'ชาย', 82.0, 'O', '+', '084-999-8877', 'wittawat@email.com', '99 ถ.ศรีนครินทร์ สมุทรปราการ', 99, '2026-06-01')
+        ('1100100234567', 'สมชาย รักชาติ', 28, 'ชาย', 68.5, 'O', '+', '081-234-5678', 'somchai@email.com', '123 ถ.สุขุมวิท กรุงเทพฯ', 6, '2026-05-10', 'approved'),
+        ('1100200345678', 'กานดา มีสุข', 32, 'หญิง', 52.0, 'A', '+', '089-876-5432', 'kanda@email.com', '45/1 ถ.แจ้งวัฒนะ นนทบุรี', 23, '2026-04-15', 'approved'),
+        ('1100300456789', 'ธนกร รัตนสว่าง', 45, 'ชาย', 75.0, 'B', '+', '086-555-1234', 'tanakorn@email.com', '88/2 ถ.มิตรภาพ โคราช', 49, '2026-03-20', 'approved'),
+        ('1100400567890', 'ปรียาพร พรหมดี', 22, 'หญิง', 48.0, 'AB', '-', '092-333-4455', 'preeyaporn@email.com', '12 หมู่ 4 จ.เชียงใหม่', 0, None, 'approved'),
+        ('1100500678901', 'วิทวัส เจริญผล', 50, 'ชาย', 82.0, 'O', '+', '084-999-8877', 'wittawat@email.com', '99 ถ.ศรีนครินทร์ สมุทรปราการ', 99, '2026-06-01', 'approved')
     ]
     
     for donor in sample_donors:
         cursor.execute('''
-        INSERT INTO donors (id_card, name, age, gender, weight, blood_type, rh_factor, phone, email, address, donation_count, last_donation_date)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO donors (id_card, name, age, gender, weight, blood_type, rh_factor, phone, email, address, donation_count, last_donation_date, status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', donor)
         donor_id = cursor.lastrowid
         
-        # Seed initial sample donation record if donation_count > 0
         if donor[10] > 0 and donor[11]:
             cursor.execute('''
             INSERT INTO donation_records (donor_id, donation_date, volume_ml, staff_notes)
@@ -105,8 +111,8 @@ def seed_sample_data(conn):
 class Donor:
     """
     Donor OOP Class representing a blood donor entity.
-    Encapsulates donor information, donation_count, health screening evaluation,
-    milestone benefits calculations, 90-day next eligible donation date, and standard rewards.
+    Encapsulates donor information, donation_count, status (pending/approved/rejected),
+    health screening evaluation, milestone benefits calculations, 90-day next eligible date.
     """
     
     MILESTONES = [
@@ -173,7 +179,7 @@ class Donor:
     ]
 
     def __init__(self, donor_id, id_card, name, age, gender, weight, blood_type, rh_factor='+', 
-                 phone='', email='', address='', donation_count=0, last_donation_date=None, created_at=None):
+                 phone='', email='', address='', donation_count=0, last_donation_date=None, status='approved', created_at=None):
         self.donor_id = donor_id
         self.id_card = id_card
         self.name = name
@@ -187,6 +193,7 @@ class Donor:
         self.address = address
         self.donation_count = int(donation_count)
         self.last_donation_date = last_donation_date
+        self.status = status or 'approved'
         self.created_at = created_at
 
     @classmethod
@@ -207,6 +214,7 @@ class Donor:
             address=row['address'],
             donation_count=row['donation_count'],
             last_donation_date=row['last_donation_date'],
+            status=row['status'] if 'status' in row.keys() else 'approved',
             created_at=row['created_at']
         )
 
@@ -224,6 +232,8 @@ class Donor:
         self.phone = data.get('phone', self.phone).strip()
         self.email = data.get('email', self.email).strip()
         self.address = data.get('address', self.address).strip()
+        if 'status' in data:
+            self.status = data['status']
         if 'donation_count' in data:
             self.donation_count = int(data['donation_count'])
         if 'last_donation_date' in data:
@@ -233,12 +243,18 @@ class Donor:
         cursor.execute('''
         UPDATE donors
         SET id_card = ?, name = ?, age = ?, gender = ?, weight = ?, blood_type = ?, rh_factor = ?, 
-            phone = ?, email = ?, address = ?, donation_count = ?, last_donation_date = ?
+            phone = ?, email = ?, address = ?, donation_count = ?, last_donation_date = ?, status = ?
         WHERE donor_id = ?
         ''', (
             self.id_card, self.name, self.age, self.gender, self.weight, self.blood_type, self.rh_factor,
-            self.phone, self.email, self.address, self.donation_count, self.last_donation_date, self.donor_id
+            self.phone, self.email, self.address, self.donation_count, self.last_donation_date, self.status, self.donor_id
         ))
+        db_conn.commit()
+
+    def set_status(self, db_conn, new_status):
+        self.status = new_status
+        cursor = db_conn.cursor()
+        cursor.execute('UPDATE donors SET status = ? WHERE donor_id = ?', (new_status, self.donor_id))
         db_conn.commit()
 
     @staticmethod
@@ -248,9 +264,6 @@ class Donor:
         db_conn.commit()
 
     def can_donate(self, health_form=None):
-        """
-        Check donor eligibility based on weight, age, health history form, and 90-day interval rule.
-        """
         reasons = []
         is_eligible = True
 
@@ -465,6 +478,7 @@ class Donor:
             'address': self.address,
             'donation_count': self.donation_count,
             'last_donation_date': self.last_donation_date,
+            'status': self.status,
             'next_eligible': self.get_next_eligible_date(),
             'created_at': self.created_at,
             'milestone_benefits': self.get_milestone_benefits(),
@@ -483,6 +497,7 @@ def get_blood_inventory_summary(db_conn):
     cursor.execute('''
     SELECT blood_type, SUM(donation_count) as total_bags 
     FROM donors 
+    WHERE status = 'approved'
     GROUP BY blood_type
     ''')
     rows = cursor.fetchall()
