@@ -202,6 +202,43 @@ class Donor:
             created_at=row['created_at']
         )
 
+    def update_info(self, db_conn, data):
+        """
+        Updates donor fields in SQLite database and updates instance attributes.
+        """
+        self.id_card = data.get('id_card', self.id_card).strip()
+        self.name = data.get('name', self.name).strip()
+        self.age = int(data.get('age', self.age))
+        self.gender = data.get('gender', self.gender).strip()
+        self.weight = float(data.get('weight', self.weight))
+        self.blood_type = data.get('blood_type', self.blood_type).strip()
+        self.rh_factor = data.get('rh_factor', self.rh_factor).strip()
+        self.phone = data.get('phone', self.phone).strip()
+        self.email = data.get('email', self.email).strip()
+        self.address = data.get('address', self.address).strip()
+        if 'donation_count' in data:
+            self.donation_count = int(data['donation_count'])
+        if 'last_donation_date' in data:
+            self.last_donation_date = data['last_donation_date']
+
+        cursor = db_conn.cursor()
+        cursor.execute('''
+        UPDATE donors
+        SET id_card = ?, name = ?, age = ?, gender = ?, weight = ?, blood_type = ?, rh_factor = ?, 
+            phone = ?, email = ?, address = ?, donation_count = ?, last_donation_date = ?
+        WHERE donor_id = ?
+        ''', (
+            self.id_card, self.name, self.age, self.gender, self.weight, self.blood_type, self.rh_factor,
+            self.phone, self.email, self.address, self.donation_count, self.last_donation_date, self.donor_id
+        ))
+        db_conn.commit()
+
+    @staticmethod
+    def delete(db_conn, donor_id):
+        cursor = db_conn.cursor()
+        cursor.execute('DELETE FROM donors WHERE donor_id = ?', (donor_id,))
+        db_conn.commit()
+
     def can_donate(self, health_form=None):
         """
         Check donor eligibility based on weight, age, health history form, and 90-day interval rule.
@@ -209,23 +246,19 @@ class Donor:
         reasons = []
         is_eligible = True
 
-        # Weight check (Must be >= 45 kg)
         if self.weight < 45.0:
             is_eligible = False
             reasons.append(f"น้ำหนักตัวต้องไม่น้อยกว่า 45 กิโลกรัม (ปัจจุบัน {self.weight} กก.)")
 
-        # Age check (17-70 years)
         if self.age < 17 or self.age > 70:
             is_eligible = False
             reasons.append(f"อายุต้องอยู่ระหว่าง 17 - 70 ปี (ปัจจุบัน {self.age} ปี)")
 
-        # 90-day interval check
         next_info = self.get_next_eligible_date()
         if not next_info['is_ready_today']:
             is_eligible = False
             reasons.append(f"ต้องเว้นระยะบริจาคอย่างน้อย 3 เดือน (90 วัน) - พร้อมบริจาคครั้งถัดไปในวันที่ {next_info['formatted_date']} (เหลืออีก {next_info['days_remaining']} วัน)")
 
-        # Health screening form check if provided
         if health_form:
             sleep_hours = float(health_form.get('sleep_hours', 0))
             if sleep_hours < 5.0:
@@ -251,9 +284,6 @@ class Donor:
         return is_eligible, reasons
 
     def get_next_eligible_date(self):
-        """
-        Calculates the next eligible donation date (90 days after last_donation_date).
-        """
         if not self.last_donation_date:
             return {
                 'eligible_date': datetime.now().strftime('%Y-%m-%d'),
@@ -291,9 +321,6 @@ class Donor:
             }
 
     def get_milestone_benefits(self):
-        """
-        Calculates and returns all earned milestone benefits & honor pins based on self.donation_count.
-        """
         earned_milestones = []
         for milestone in self.MILESTONES:
             if self.donation_count >= milestone['count']:
@@ -315,9 +342,6 @@ class Donor:
         return earned_milestones
 
     def get_next_milestone_progress(self):
-        """
-        Calculates the progress percentage and remaining donations to reach the next milestone goal.
-        """
         next_milestone = None
         for m in self.MILESTONES:
             if self.donation_count < m['count']:
@@ -352,9 +376,6 @@ class Donor:
         }
 
     def get_standard_rewards(self):
-        """
-        Returns standard basic rewards received every time a donation is completed.
-        """
         return [
             {
                 'category': 'อาหารและเครื่องดื่ม',
@@ -374,9 +395,6 @@ class Donor:
         ]
 
     def get_certificate_data(self):
-        """
-        Generates official honor certificate metadata for milestone achievers.
-        """
         earned = [m for m in self.MILESTONES if self.donation_count >= m['count']]
         highest_milestone = earned[-1] if earned else None
 
@@ -395,21 +413,15 @@ class Donor:
         }
 
     def record_donation(self, db_conn, volume_ml=450, donation_date=None, notes=''):
-        """
-        Records a new blood donation, updates donation_count, and saves record to SQLite DB.
-        """
         if not donation_date:
             donation_date = datetime.now().strftime('%Y-%m-%d')
             
         cursor = db_conn.cursor()
-        
-        # Insert into donation_records
         cursor.execute('''
         INSERT INTO donation_records (donor_id, donation_date, volume_ml, staff_notes)
         VALUES (?, ?, ?, ?)
         ''', (self.donor_id, donation_date, volume_ml, notes))
         
-        # Increment donation_count
         self.donation_count += 1
         self.last_donation_date = donation_date
         
@@ -421,7 +433,6 @@ class Donor:
         
         db_conn.commit()
         
-        # Check newly unlocked milestone
         newly_unlocked = [m for m in self.MILESTONES if m['count'] == self.donation_count]
         
         return {
@@ -456,12 +467,7 @@ class Donor:
 
 
 def get_blood_inventory_summary(db_conn):
-    """
-    Calculates total collected blood inventory grouped by blood type (A, B, O, AB).
-    """
     cursor = db_conn.cursor()
-    
-    # Query volume by blood group
     cursor.execute('''
     SELECT d.blood_type, COUNT(r.record_id) as total_bags, SUM(r.volume_ml) as total_volume_ml
     FROM donation_records r
@@ -483,7 +489,6 @@ def get_blood_inventory_summary(db_conn):
             bags = row['total_bags'] or 0
             vol = row['total_volume_ml'] or 0
             
-            # Stock status threshold
             status = 'ขาดแคลน' if bags < 5 else ('สมบูรณ์' if bags >= 15 else 'ปกติ')
             inventory[b_type] = {
                 'bags': bags,

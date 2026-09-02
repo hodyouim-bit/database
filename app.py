@@ -15,6 +15,30 @@ init_db()
 def home():
     return render_template('index.html')
 
+@app.route('/api/login', methods=['POST'])
+def admin_login():
+    data = request.json or {}
+    username = str(data.get('username', '')).strip()
+    password = str(data.get('password', '')).strip()
+
+    # Admin Login Credential Check: Username 6812732101, Password choijraa or choljraa
+    if username == '6812732101' and password in ['choijraa', 'choljraa']:
+        return jsonify({
+            'success': True,
+            'message': 'เข้าสู่ระบบ Admin สำเร็จ',
+            'token': 'admin_session_token_6812732101',
+            'user': {
+                'username': '6812732101',
+                'name': 'เจ้าหน้าที่ Admin (6812732101)',
+                'role': 'admin'
+            }
+        })
+    else:
+        return jsonify({
+            'success': False,
+            'message': 'ชื่อผู้ใช้หรือรหัสผ่าน Admin ไม่ถูกต้อง (กรุณาใช้ 6812732101 / choijraa)'
+        }), 401
+
 @app.route('/api/donors', methods=['GET'])
 def get_donors():
     search_q = request.args.get('q', '').strip()
@@ -56,7 +80,6 @@ def get_donor_detail(donor_id):
 
     donor = Donor.from_row(donor_row)
 
-    # Get history
     cursor.execute('''
     SELECT * FROM donation_records 
     WHERE donor_id = ? 
@@ -70,6 +93,52 @@ def get_donor_detail(donor_id):
     data = donor.to_dict()
     data['history'] = history
     return jsonify({'success': True, 'donor': data})
+
+@app.route('/api/donors/<int:donor_id>', methods=['PUT'])
+def update_donor(donor_id):
+    data = request.json or {}
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('SELECT * FROM donors WHERE donor_id = ?', (donor_id,))
+    row = cursor.fetchone()
+
+    if not row:
+        conn.close()
+        return jsonify({'success': False, 'message': 'ไม่พบข้อมูลผู้บริจาคในระบบ'}), 404
+
+    donor = Donor.from_row(row)
+    try:
+        donor.update_info(conn, data)
+        conn.close()
+        return jsonify({
+            'success': True,
+            'message': f'แก้ไขข้อมูลผู้บริจาค {donor.name} เรียบร้อยแล้ว',
+            'donor': donor.to_dict()
+        })
+    except Exception as e:
+        conn.close()
+        return jsonify({'success': False, 'message': f'เกิดข้อผิดพลาดในการแก้ไขข้อมูล: {str(e)}'}), 400
+
+@app.route('/api/donors/<int:donor_id>', methods=['DELETE'])
+def delete_donor(donor_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('SELECT * FROM donors WHERE donor_id = ?', (donor_id,))
+    row = cursor.fetchone()
+
+    if not row:
+        conn.close()
+        return jsonify({'success': False, 'message': 'ไม่พบข้อมูลผู้บริจาคในระบบ'}), 404
+
+    donor_name = row['name']
+    Donor.delete(conn, donor_id)
+    conn.close()
+
+    return jsonify({
+        'success': True,
+        'message': f'ลบข้อมูลผู้บริจาค {donor_name} ออกจากระบบแล้ว'
+    })
 
 @app.route('/api/donors/<int:donor_id>/certificate', methods=['GET'])
 def get_donor_certificate(donor_id):
@@ -112,7 +181,6 @@ def register_donor():
     if not id_card or not name or not phone:
         return jsonify({'success': False, 'message': 'กรุณากรอกเลขบัตรประชาชน ชื่อ-นามสกุล และเบอร์โทรศัพท์'}), 400
 
-    # Create donor object instance to evaluate eligibility
     temp_donor = Donor(
         donor_id=None,
         id_card=id_card,
@@ -127,7 +195,6 @@ def register_donor():
         address=address
     )
 
-    # Health screening parameters
     health_form = {
         'sleep_hours': data.get('sleep_hours', 8),
         'high_fat_meal': data.get('high_fat_meal', False),
@@ -138,7 +205,6 @@ def register_donor():
 
     is_eligible, reasons = temp_donor.can_donate(health_form)
 
-    # Save donor to Database
     conn = get_db_connection()
     cursor = conn.cursor()
 
@@ -150,7 +216,6 @@ def register_donor():
         
         donor_id = cursor.lastrowid
         
-        # Log health screening entry
         cursor.execute('''
         INSERT INTO health_screenings (donor_id, screening_date, sleep_hours, high_fat_meal_free, water_intake_ok, alcohol_free_24h, smoking_free_1h, passed, notes)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -207,7 +272,6 @@ def record_donation():
 
     donor = Donor.from_row(row)
     
-    # Check weight eligibility before recording donation
     if donor.weight < 45.0:
         conn.close()
         return jsonify({
@@ -272,13 +336,11 @@ def get_stats():
     cursor.execute('SELECT SUM(volume_ml) FROM donation_records')
     total_volume_ml = cursor.fetchone()[0] or (total_donations * 450)
 
-    # Blood group distribution
     cursor.execute('SELECT blood_type, COUNT(*) as count FROM donors GROUP BY blood_type')
     blood_groups = {row['blood_type']: row['count'] for row in cursor.fetchall()}
 
     inventory = get_blood_inventory_summary(conn)
 
-    # Milestone stats
     cursor.execute('SELECT COUNT(*) FROM donors WHERE donation_count >= 1')
     milestone_1 = cursor.fetchone()[0]
 

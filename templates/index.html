@@ -32,6 +32,11 @@
                 <button class="nav-btn" data-tab="donors-list">👥 รายชื่อผู้บริจาค</button>
             </nav>
             <div class="header-actions">
+                <div id="admin-status-badge" class="admin-badge hidden">
+                    <span>👤 Admin: <strong>6812732101</strong></span>
+                    <button onclick="logoutAdmin()" class="btn-logout" title="ออกจากระบบ Admin">🚪 ออกจากระบบ</button>
+                </div>
+                <button id="admin-login-btn" class="btn btn-secondary btn-sm" onclick="openAdminLoginModal()">🔑 ล็อกอิน Admin</button>
                 <button id="theme-toggle" class="btn btn-icon" title="สลับโหมด มืด/สว่าง">🌙</button>
                 <button class="btn btn-primary" onclick="switchTab('record')">+ บันทึกบริจาคใหม่</button>
             </div>
@@ -428,7 +433,6 @@
                     </select>
                 </div>
                 <div id="lookup-result-display" class="lookup-results hidden">
-                    <!-- Progress Card -->
                     <div class="progress-box">
                         <div class="progress-info">
                             <h4>ระดับและเป้าหมายถัดไป: <span id="lp-next-title">-</span></h4>
@@ -445,14 +449,11 @@
                         <button class="btn btn-primary" onclick="triggerCertificateFromLookup()">📜 พิมพ์ใบประกาศเกียรติคุณ</button>
                     </div>
 
-                    <!-- Earned Benefits List -->
                     <div class="milestones-grid" id="lp-milestones-container">
-                        <!-- Dynamic rendered milestones -->
                     </div>
                 </div>
             </div>
 
-            <!-- Standard Milestone Rules Showcase Grid -->
             <h3 class="section-heading">เกณฑ์สวัสดิการและเข็มเชิดชูเกียรติทั้งหมด</h3>
             <div class="milestone-rules-grid">
                 <div class="rule-card">
@@ -532,7 +533,6 @@
             </div>
 
             <div class="guidelines-grid">
-                <!-- Pre-donation guidelines -->
                 <div class="glass-card guideline-card danger-border">
                     <div class="card-header danger-header">
                         <h3>🚫 สิ่งที่ต้องเตรียมตัวและข้อห้ามก่อนวันบริจาคเลือด</h3>
@@ -580,7 +580,6 @@
                     </div>
                 </div>
 
-                <!-- Post-donation guidelines -->
                 <div class="glass-card guideline-card success-border">
                     <div class="card-header success-header">
                         <h3>💚 การดูแลตัวเองหลังจากบริจาคเลือด</h3>
@@ -630,7 +629,6 @@
             </div>
 
             <div class="glass-card">
-                <!-- Filters & Search Bar -->
                 <div class="table-controls">
                     <div class="search-box">
                         <input type="text" id="search-input" placeholder="🔍 ค้นหาชื่อ, เลขบัตรประชาชน หรือเบอร์โทรศัพท์...">
@@ -646,7 +644,6 @@
                     </div>
                 </div>
 
-                <!-- Donors Table -->
                 <div class="table-responsive">
                     <table class="data-table">
                         <thead>
@@ -663,13 +660,123 @@
                             </tr>
                         </thead>
                         <tbody id="donors-table-body">
-                            <!-- Dynamic rows -->
                         </tbody>
                     </table>
                 </div>
             </div>
         </section>
     </main>
+
+    <!-- ADMIN LOGIN MODAL -->
+    <div id="admin-login-modal" class="modal-overlay hidden">
+        <div class="modal-content glass-card login-modal">
+            <button class="modal-close" onclick="closeAdminLoginModal()">&times;</button>
+            <div class="modal-header">
+                <div class="modal-avatar">🔑</div>
+                <div class="modal-donor-title">
+                    <h3>เข้าสู่ระบบ Admin เจ้าหน้าที่</h3>
+                    <p>กรอกรหัสประจำตัว Admin เพื่อเปิดสิทธิ์การแก้ไขและลบข้อมูล</p>
+                </div>
+            </div>
+            <form id="admin-login-form">
+                <div class="form-group" style="margin-bottom: 15px;">
+                    <label for="admin-user-input">Username เจ้าหน้าที่ Admin <span class="required">*</span></label>
+                    <input type="text" id="admin-user-input" placeholder="เช่น 6812732101" value="6812732101" required>
+                </div>
+                <div class="form-group" style="margin-bottom: 20px;">
+                    <label for="admin-pass-input">Password รหัสผ่าน <span class="required">*</span></label>
+                    <input type="password" id="admin-pass-input" placeholder="รหัสผ่าน Admin" value="choijraa" required>
+                </div>
+                <div class="modal-footer">
+                    <button type="submit" class="btn btn-primary">ยืนยันการล็อกอิน Admin</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeAdminLoginModal()">ยกเลิก</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- EDIT DONOR MODAL -->
+    <div id="edit-donor-modal" class="modal-overlay hidden">
+        <div class="modal-content glass-card">
+            <button class="modal-close" onclick="closeEditDonorModal()">&times;</button>
+            <div class="modal-header">
+                <div class="modal-avatar">✏️</div>
+                <div class="modal-donor-title">
+                    <h3>แก้ไขข้อมูลผู้บริจาค (Admin Mode)</h3>
+                    <p id="edit-donor-subtitle">รหัสผู้บริจาค: # -</p>
+                </div>
+            </div>
+            <form id="edit-donor-form">
+                <input type="hidden" id="edit-donor-id">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="edit-id-card">เลขประจำตัวประชาชน <span class="required">*</span></label>
+                        <input type="text" id="edit-id-card" required maxlength="13">
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-name">ชื่อ-นามสกุล <span class="required">*</span></label>
+                        <input type="text" id="edit-name" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-age">อายุ (ปี) <span class="required">*</span></label>
+                        <input type="number" id="edit-age" required min="17" max="70">
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-gender">เพศ</label>
+                        <select id="edit-gender">
+                            <option value="ชาย">ชาย</option>
+                            <option value="หญิง">หญิง</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-weight">น้ำหนัก (กิโลกรัม) <span class="required">* (>= 45 kg)</span></label>
+                        <input type="number" id="edit-weight" step="0.1" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-blood-type">หมู่เลือด</label>
+                        <select id="edit-blood-type">
+                            <option value="O">O</option>
+                            <option value="A">A</option>
+                            <option value="B">B</option>
+                            <option value="AB">AB</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-rh">Rh Factor</label>
+                        <select id="edit-rh">
+                            <option value="+">Rh Positive (+)</option>
+                            <option value="-">Rh Negative (-)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-phone">เบอร์โทรศัพท์ <span class="required">*</span></label>
+                        <input type="tel" id="edit-phone" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-count">จำนวนบริจาคสะสม (`donation_count`)</label>
+                        <input type="number" id="edit-count" min="0" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-last-date">วันบริจาคล่าสุด</label>
+                        <input type="date" id="edit-last-date">
+                    </div>
+                    <div class="form-group full-width">
+                        <label for="edit-email">อีเมล</label>
+                        <input type="email" id="edit-email">
+                    </div>
+                    <div class="form-group full-width">
+                        <label for="edit-address">ที่อยู่ปัจจุบัน</label>
+                        <textarea id="edit-address" rows="2"></textarea>
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="submit" class="btn btn-primary">💾 บันทึกการแก้ไขข้อมูล</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeEditDonorModal()">ยกเลิก</button>
+                </div>
+            </form>
+        </div>
+    </div>
 
     <!-- DONOR DETAIL MODAL -->
     <div id="donor-modal" class="modal-overlay hidden">
@@ -693,14 +800,15 @@
                     <div class="d-detail-item"><span>บริจาคสะสม:</span> <strong id="modal-count" class="text-crimson">0</strong> ครั้ง</div>
                 </div>
 
-                <div class="modal-actions-row" style="margin-bottom: 20px; display:flex; gap:12px;">
+                <div class="modal-actions-row" style="margin-bottom: 20px; display:flex; gap:10px; flex-wrap:wrap;">
                     <button class="btn btn-secondary btn-sm" onclick="openDigitalCardModalFromDetail()">🪪 ดูบัตรดิจิทัล</button>
                     <button class="btn btn-primary btn-sm" onclick="openCertificateModalFromDetail()">📜 ออกใบประกาศเกียรติคุณ</button>
+                    <button id="detail-edit-btn" class="btn btn-warning btn-sm admin-only hidden" onclick="openEditDonorModalFromDetail()">✏️ แก้ไขข้อมูล (Admin)</button>
+                    <button id="detail-delete-btn" class="btn btn-danger btn-sm admin-only hidden" onclick="deleteDonorFromDetail()">🗑️ ลบข้อมูล</button>
                 </div>
 
                 <div class="modal-section-title">🏆 เข็มเชิดชูเกียรติ & สวัสดิการที่ได้รับ</div>
                 <div id="modal-milestones-list" class="modal-milestones">
-                    <!-- Dynamic badges -->
                 </div>
 
                 <div class="modal-section-title">📜 ประวัติการบริจาค (Donation Records History)</div>
@@ -714,7 +822,6 @@
                             </tr>
                         </thead>
                         <tbody id="modal-history-body">
-                            <!-- Dynamic history -->
                         </tbody>
                     </table>
                 </div>

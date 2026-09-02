@@ -3,23 +3,25 @@
  */
 
 let activeModalDonorId = null;
+let isAdminLoggedIn = false;
 
 document.addEventListener('DOMContentLoaded', () => {
-    initTabNavigation();
     initThemeToggle();
+    initAdminAuth();
+    initTabNavigation();
     initQuickEligibilityChecker();
     initRegistrationForm();
     initRecordDonationForm();
     initMilestoneLookup();
     initDonorsDirectory();
-    
+    initEditDonorForm();
+
     // Initial data load
     loadDashboardStats();
     loadBloodInventory();
     loadDonorsList();
     populateDonorSelects();
 
-    // Set today's date in record donation form
     const recDateInput = document.getElementById('rec-date');
     if (recDateInput) {
         recDateInput.value = new Date().toISOString().split('T')[0];
@@ -27,7 +29,79 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 /* ==========================================================================
-   1. Theme Toggle & Navigation
+   1. Admin Authentication & Session Management
+   ========================================================================== */
+function initAdminAuth() {
+    const adminToken = localStorage.getItem('adminToken');
+    if (adminToken) {
+        setAdminState(true);
+    } else {
+        setAdminState(false);
+    }
+
+    const loginForm = document.getElementById('admin-login-form');
+    if (loginForm) {
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = document.getElementById('admin-user-input').value.trim();
+            const password = document.getElementById('admin-pass-input').value.trim();
+
+            try {
+                const res = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+
+                const data = await res.json();
+                if (res.ok && data.success) {
+                    localStorage.setItem('adminToken', data.token);
+                    setAdminState(true);
+                    closeAdminLoginModal();
+                    showToast(`🔑 ยินดีต้อนรับ ${data.user.name} เข้าสู่ระบบ!`);
+                    loadDonorsList();
+                } else {
+                    showToast(`❌ ${data.message || 'ชื่อผู้ใช้หรือรหัสผ่าน Admin ไม่ถูกต้อง'}`);
+                }
+            } catch (err) {
+                console.error('Admin login error:', err);
+                showToast('❌ ไม่สามารถเข้าสู่ระบบได้');
+            }
+        });
+    }
+}
+
+function setAdminState(loggedIn) {
+    isAdminLoggedIn = loggedIn;
+    const loginBtn = document.getElementById('admin-login-btn');
+    const badge = document.getElementById('admin-status-badge');
+
+    if (loggedIn) {
+        if (loginBtn) loginBtn.classList.add('hidden');
+        if (badge) badge.classList.remove('hidden');
+    } else {
+        if (loginBtn) loginBtn.classList.remove('hidden');
+        if (badge) badge.classList.add('hidden');
+    }
+}
+
+function openAdminLoginModal() {
+    document.getElementById('admin-login-modal').classList.remove('hidden');
+}
+
+function closeAdminLoginModal() {
+    document.getElementById('admin-login-modal').classList.add('hidden');
+}
+
+function logoutAdmin() {
+    localStorage.removeItem('adminToken');
+    setAdminState(false);
+    showToast('👋 ออกจากระบบ Admin เรียบร้อยแล้ว');
+    loadDonorsList();
+}
+
+/* ==========================================================================
+   2. Theme Toggle & Navigation
    ========================================================================== */
 function initThemeToggle() {
     const btn = document.getElementById('theme-toggle');
@@ -75,7 +149,7 @@ function switchTab(tabId) {
 }
 
 /* ==========================================================================
-   2. Dashboard & Inventory Data Loaders
+   3. Dashboard & Inventory Data Loaders
    ========================================================================== */
 async function loadDashboardStats() {
     try {
@@ -125,7 +199,7 @@ async function loadBloodInventory() {
 }
 
 /* ==========================================================================
-   3. Quick Eligibility Checker
+   4. Quick Eligibility Checker
    ========================================================================== */
 function initQuickEligibilityChecker() {
     const weightInput = document.getElementById('chk-weight');
@@ -190,7 +264,7 @@ function initQuickEligibilityChecker() {
 }
 
 /* ==========================================================================
-   4. Registration & Record Donation
+   5. Registration & Record Donation
    ========================================================================== */
 function initRegistrationForm() {
     const regForm = document.getElementById('register-donor-form');
@@ -368,7 +442,123 @@ function initRecordDonationForm() {
 }
 
 /* ==========================================================================
-   5. Milestone Lookup
+   6. Edit Donor Form & Actions
+   ========================================================================== */
+function initEditDonorForm() {
+    const editForm = document.getElementById('edit-donor-form');
+    if (!editForm) return;
+
+    editForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        const donorId = parseInt(document.getElementById('edit-donor-id').value);
+        const idCard = document.getElementById('edit-id-card').value.trim();
+        const name = document.getElementById('edit-name').value.trim();
+        const age = parseInt(document.getElementById('edit-age').value);
+        const gender = document.getElementById('edit-gender').value;
+        const weight = parseFloat(document.getElementById('edit-weight').value);
+        const bloodType = document.getElementById('edit-blood-type').value;
+        const rhFactor = document.getElementById('edit-rh').value;
+        const phone = document.getElementById('edit-phone').value.trim();
+        const count = parseInt(document.getElementById('edit-count').value);
+        const lastDate = document.getElementById('edit-last-date').value;
+        const email = document.getElementById('edit-email').value.trim();
+        const address = document.getElementById('edit-address').value.trim();
+
+        const payload = {
+            id_card: idCard, name: name, age: age, gender: gender, weight: weight,
+            blood_type: bloodType, rh_factor: rhFactor, phone: phone, donation_count: count,
+            last_donation_date: lastDate || None, email: email, address: address
+        };
+
+        try {
+            const res = await fetch(`/api/donors/${donorId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            const data = await res.json();
+            if (res.ok && data.success) {
+                showToast(`✅ แก้ไขข้อมูลผู้บริจาคคุณ ${data.donor.name} สำเร็จ!`);
+                closeEditDonorModal();
+                closeDonorModal();
+                loadDashboardStats();
+                loadBloodInventory();
+                populateDonorSelects();
+                loadDonorsList();
+            } else {
+                showToast(`❌ ${data.message || 'ไม่สามารถแก้ไขข้อมูลได้'}`);
+            }
+        } catch (err) {
+            console.error('Error updating donor:', err);
+            showToast('❌ เกิดข้อผิดพลาดในการเชื่อมต่อ');
+        }
+    });
+}
+
+function openEditDonorModal(donorId) {
+    const donor = allDonorsCache.find(d => d.donor_id === donorId);
+    if (!donor) return;
+
+    document.getElementById('edit-donor-id').value = donor.donor_id;
+    document.getElementById('edit-donor-subtitle').textContent = `รหัสผู้บริจาค: #${donor.donor_id}`;
+    document.getElementById('edit-id-card').value = donor.id_card;
+    document.getElementById('edit-name').value = donor.name;
+    document.getElementById('edit-age').value = donor.age;
+    document.getElementById('edit-gender').value = donor.gender;
+    document.getElementById('edit-weight').value = donor.weight;
+    document.getElementById('edit-blood-type').value = donor.blood_type;
+    document.getElementById('edit-rh').value = donor.rh_factor;
+    document.getElementById('edit-phone').value = donor.phone;
+    document.getElementById('edit-count').value = donor.donation_count;
+    document.getElementById('edit-last-date').value = donor.last_donation_date || '';
+    document.getElementById('edit-email').value = donor.email || '';
+    document.getElementById('edit-address').value = donor.address || '';
+
+    document.getElementById('edit-donor-modal').classList.remove('hidden');
+}
+
+function closeEditDonorModal() {
+    document.getElementById('edit-donor-modal').classList.add('hidden');
+}
+
+function openEditDonorModalFromDetail() {
+    if (activeModalDonorId) openEditDonorModal(activeModalDonorId);
+}
+
+async function deleteDonor(donorId) {
+    const donor = allDonorsCache.find(d => d.donor_id === donorId);
+    if (!donor) return;
+
+    if (!confirm(`⚠️ คุณแน่ใจหรือไม่ที่จะลบผู้บริจาคคุณ "${donor.name}" ออกจากระบบ?`)) return;
+
+    try {
+        const res = await fetch(`/api/donors/${donorId}`, { method: 'DELETE' });
+        const data = await res.json();
+
+        if (res.ok && data.success) {
+            showToast(`🗑️ ${data.message}`);
+            closeDonorModal();
+            loadDashboardStats();
+            loadBloodInventory();
+            populateDonorSelects();
+            loadDonorsList();
+        } else {
+            showToast(`❌ ${data.message || 'ไม่สามารถลบข้อมูลได้'}`);
+        }
+    } catch (err) {
+        console.error('Error deleting donor:', err);
+        showToast('❌ เกิดข้อผิดพลาดในการลบข้อมูล');
+    }
+}
+
+function deleteDonorFromDetail() {
+    if (activeModalDonorId) deleteDonor(activeModalDonorId);
+}
+
+/* ==========================================================================
+   7. Milestone Lookup
    ========================================================================== */
 function initMilestoneLookup() {
     const lookupSelect = document.getElementById('lookup-donor-select');
@@ -423,7 +613,7 @@ function triggerCertificateFromLookup() {
 }
 
 /* ==========================================================================
-   6. Donors Directory
+   8. Donors Directory - Grouped by Blood Type
    ========================================================================== */
 function initDonorsDirectory() {
     const searchInput = document.getElementById('search-input');
@@ -451,45 +641,92 @@ async function loadDonorsList(searchQuery = '', bloodTypeFilter = '') {
         const data = await res.json();
 
         if (data && data.donors) {
+            allDonorsCache = data.donors;
             if (data.donors.length === 0) {
                 tableBody.innerHTML = `<tr><td colspan="9" style="text-align: center; color: #94a3b8; padding: 30px;">ไม่พบข้อมูลผู้บริจาคในระบบ</td></tr>`;
                 return;
             }
 
-            let rowsHtml = '';
+            // Group donors by blood type
+            const bloodOrder = ['O', 'A', 'B', 'AB'];
+            const grouped = { 'O': [], 'A': [], 'B': [], 'AB': [] };
+
             data.donors.forEach(d => {
-                let milestoneBadge = '<span class="badge-benefit">ผู้บริจาคทั่วไป</span>';
-                if (d.donation_count >= 24) {
-                    milestoneBadge = '<span class="badge-benefit gold">🏆 สิทธิยกเว้นค่าห้อง/ค่ารักษา (24+)</span>';
-                } else if (d.donation_count >= 7) {
-                    milestoneBadge = '<span class="badge-benefit gold">🎗️ ตรวจสุขภาพฟรี (7+)</span>';
-                } else if (d.donation_count >= 1) {
-                    milestoneBadge = '<span class="badge-benefit">🏅 ผู้บริจาคใหม่ (1+)</span>';
+                const bType = d.blood_type;
+                if (grouped[bType]) {
+                    grouped[bType].push(d);
+                } else {
+                    grouped[bType] = [d];
                 }
+            });
 
-                const next = d.next_eligible;
-                const readyBadge = next.is_ready_today ? 
-                    '<span class="ready-badge">✅ พร้อมบริจาค</span>' : 
-                    `<span class="wait-badge">⏳ ${next.formatted_date} (${next.days_remaining} วัน)</span>`;
+            let fullHtml = '';
 
-                rowsHtml += `
-                    <tr>
-                        <td>#${d.donor_id}</td>
-                        <td><strong>${d.name}</strong><br><small style="color:#64748b;">${d.phone}</small></td>
-                        <td>${d.age} ปี / ${d.gender}</td>
-                        <td>${d.weight} kg</td>
-                        <td><span class="blood-badge ${d.blood_type}">${d.blood_type}${d.rh_factor}</span></td>
-                        <td><strong class="text-crimson" style="font-size:1.05rem;">${d.donation_count}</strong> ครั้ง</td>
-                        <td>${readyBadge}</td>
-                        <td>${milestoneBadge}</td>
-                        <td>
-                            <button class="btn btn-secondary btn-sm" onclick="openDonorModal(${d.donor_id})">ดูประวัติ & สิทธิ</button>
+            // If user selected a specific filter, only show that group
+            const displayGroups = bloodTypeFilter ? [bloodTypeFilter] : bloodOrder;
+
+            displayGroups.forEach(bGroup => {
+                const donorsInGroup = grouped[bGroup] || [];
+                if (donorsInGroup.length === 0 && bloodTypeFilter) return;
+
+                // Group Section Header Row
+                fullHtml += `
+                    <tr class="blood-group-header-row">
+                        <td colspan="9">
+                            <div class="blood-group-header">
+                                <span class="blood-badge ${bGroup}">หมู่ ${bGroup}</span>
+                                <strong>กลุ่มผู้บริจาคหมู่เลือด ${bGroup}</strong>
+                                <span class="group-count-tag">(${donorsInGroup.length} คน)</span>
+                            </div>
                         </td>
                     </tr>
                 `;
+
+                if (donorsInGroup.length === 0) {
+                    fullHtml += `<tr><td colspan="9" style="text-align: center; color: #94a3b8; padding: 12px;">ยังไม่มีผู้บริจาคในกลุ่มหมู่เลือด ${bGroup}</td></tr>`;
+                } else {
+                    donorsInGroup.forEach(d => {
+                        let milestoneBadge = '<span class="badge-benefit">ผู้บริจาคทั่วไป</span>';
+                        if (d.donation_count >= 24) {
+                            milestoneBadge = '<span class="badge-benefit gold">🏆 สิทธิยกเว้นค่าห้อง/ค่ารักษา (24+)</span>';
+                        } else if (d.donation_count >= 7) {
+                            milestoneBadge = '<span class="badge-benefit gold">🎗️ ตรวจสุขภาพฟรี (7+)</span>';
+                        } else if (d.donation_count >= 1) {
+                            milestoneBadge = '<span class="badge-benefit">🏅 ผู้บริจาคใหม่ (1+)</span>';
+                        }
+
+                        const next = d.next_eligible;
+                        const readyBadge = next.is_ready_today ? 
+                            '<span class="ready-badge">✅ พร้อมบริจาค</span>' : 
+                            `<span class="wait-badge">⏳ ${next.formatted_date} (${next.days_remaining} วัน)</span>`;
+
+                        const adminActions = isAdminLoggedIn ? 
+                            `<button class="btn btn-warning btn-sm" onclick="openEditDonorModal(${d.donor_id})" title="แก้ไขข้อมูลผู้บริจาค">✏️ แก้ไข</button>
+                             <button class="btn btn-danger btn-sm" onclick="deleteDonor(${d.donor_id})" title="ลบข้อมูลผู้บริจาค">🗑️ ลบ</button>` : '';
+
+                        fullHtml += `
+                            <tr>
+                                <td>#${d.donor_id}</td>
+                                <td><strong>${d.name}</strong><br><small style="color:#64748b;">${d.phone}</small></td>
+                                <td>${d.age} ปี / ${d.gender}</td>
+                                <td>${d.weight} kg</td>
+                                <td><span class="blood-badge ${d.blood_type}">${d.blood_type}${d.rh_factor}</span></td>
+                                <td><strong class="text-crimson" style="font-size:1.05rem;">${d.donation_count}</strong> ครั้ง</td>
+                                <td>${readyBadge}</td>
+                                <td>${milestoneBadge}</td>
+                                <td>
+                                    <div style="display:flex; gap:6px; align-items:center;">
+                                        <button class="btn btn-secondary btn-sm" onclick="openDonorModal(${d.donor_id})">ดูประวัติ & สิทธิ</button>
+                                        ${adminActions}
+                                    </div>
+                                </td>
+                            </tr>
+                        `;
+                    });
+                }
             });
 
-            tableBody.innerHTML = rowsHtml;
+            tableBody.innerHTML = fullHtml;
         }
     } catch (err) {
         console.error('Error loading donors table:', err);
@@ -497,7 +734,7 @@ async function loadDonorsList(searchQuery = '', bloodTypeFilter = '') {
 }
 
 /* ==========================================================================
-   7. Modals: Detail, Digital Card, Certificate
+   9. Modals: Detail, Digital Card, Certificate
    ========================================================================== */
 async function openDonorModal(donorId) {
     activeModalDonorId = donorId;
@@ -516,6 +753,16 @@ async function openDonorModal(donorId) {
             document.getElementById('modal-blood').textContent = `${d.blood_type}${d.rh_factor}`;
             document.getElementById('modal-phone').textContent = d.phone;
             document.getElementById('modal-count').textContent = d.donation_count;
+
+            const editBtn = document.getElementById('detail-edit-btn');
+            const delBtn = document.getElementById('detail-delete-btn');
+            if (isAdminLoggedIn) {
+                if (editBtn) editBtn.classList.remove('hidden');
+                if (delBtn) delBtn.classList.remove('hidden');
+            } else {
+                if (editBtn) editBtn.classList.add('hidden');
+                if (delBtn) delBtn.classList.add('hidden');
+            }
 
             const milestonesContainer = document.getElementById('modal-milestones-list');
             let mHtml = '';
@@ -615,7 +862,7 @@ function closeCertificateModal() {
 }
 
 /* ==========================================================================
-   8. Toast Notification System
+   10. Toast Notification System
    ========================================================================== */
 function showToast(message) {
     const toast = document.getElementById('toast');
