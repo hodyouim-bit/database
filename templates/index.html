@@ -1135,6 +1135,9 @@
 
             <!-- Tab 2: User Sign Up Form -->
             <form id="user-signup-form" class="login-subform hidden">
+                <div style="background: rgba(2, 132, 199, 0.1); border: 1px solid rgba(2, 132, 199, 0.3); padding: 10px 14px; border-radius: 8px; margin-bottom: 15px; font-size: 0.85rem; color: #0284c7; line-height: 1.4;">
+                    👤 <strong>สมัครสมาชิกบัญชีผู้ใช้ (User Account):</strong> เป็นการสร้างบัญชีเพื่อเข้าสู่ระบบพอร์ตัล (หากต้องการเสนอตัวบริจาคโลหิต สามารถกรอกแบบฟอร์มลงทะเบียนบริจาคโลหิตเพิ่มเติมได้ในระบบ)
+                </div>
                 <div class="form-grid">
                     <div class="form-group">
                         <label for="signup-id-card">เลขประจำตัวประชาชน <span class="required">* (13 หลัก)</span></label>
@@ -1146,40 +1149,16 @@
                     </div>
                     <div class="form-group">
                         <label for="signup-password">ตั้งรหัสผ่าน <span class="required">*</span></label>
-                        <input type="password" id="signup-password" placeholder="กำหนดรหัสผ่าน" required>
+                        <input type="password" id="signup-password" placeholder="กำหนดรหัสผ่านเพื่อเข้าสู่ระบบ" required>
                     </div>
                     <div class="form-group">
                         <label for="signup-phone">เบอร์โทรศัพท์ <span class="required">*</span></label>
                         <input type="tel" id="signup-phone" placeholder="08X-XXX-XXXX" required>
                     </div>
-                    <div class="form-group">
-                        <label for="signup-blood-type">หมู่เลือด <span class="required">*</span></label>
-                        <select id="signup-blood-type" required>
-                            <option value="O">หมู่ O</option>
-                            <option value="A">หมู่ A</option>
-                            <option value="B">หมู่ B</option>
-                            <option value="AB">หมู่ AB</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label for="signup-weight">น้ำหนัก (kg) <span class="required">* (>= 45 kg)</span></label>
-                        <input type="number" id="signup-weight" value="55.0" step="0.1" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="signup-age">อายุ (ปี)</label>
-                        <input type="number" id="signup-age" value="25" min="17" max="70" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="signup-gender">เพศ</label>
-                        <select id="signup-gender">
-                            <option value="ชาย">ชาย</option>
-                            <option value="หญิง">หญิง</option>
-                        </select>
-                    </div>
                 </div>
 
                 <div class="modal-footer" style="margin-top: 20px;">
-                    <button type="submit" class="btn btn-primary">ยืนยันสมัครสมาชิกใหม่</button>
+                    <button type="submit" class="btn btn-primary">ยืนยันสมัครสมาชิกผู้ใช้</button>
                     <button type="button" class="btn btn-secondary" onclick="closeLoginModal()">ยกเลิก</button>
                 </div>
             </form>
