@@ -5,7 +5,7 @@ import sqlite3
 import os
 from datetime import datetime
 from werkzeug.security import generate_password_hash
-from models import get_db_connection, init_db, Donor, Admin, Appointment, get_blood_inventory_summary
+from models import get_db_connection, init_db, Donor, Admin, User, Appointment, get_blood_inventory_summary
 
 app = Flask(__name__, template_folder='templates', static_folder='static')
 CORS(app)
@@ -25,13 +25,7 @@ def handle_signup():
     name = str(data.get('name', '')).strip()
     password = str(data.get('password', '')).strip()
     phone = str(data.get('phone', '')).strip()
-    blood_type = str(data.get('blood_type', 'O')).strip()
-    rh_factor = str(data.get('rh_factor', '+')).strip()
-    age = int(data.get('age', 25))
-    gender = str(data.get('gender', 'ไม่ระบุ')).strip()
-    weight = float(data.get('weight', 55.0))
     email = str(data.get('email', '')).strip()
-    address = str(data.get('address', '')).strip()
 
     if not id_card or not name or not password or not phone:
         return jsonify({'success': False, 'message': 'กรุณากรอกเลขบัตรประชาชน, ชื่อ-นามสกุล, รหัสผ่าน และเบอร์โทรศัพท์ให้ครบถ้วน'}), 400
@@ -40,39 +34,26 @@ def handle_signup():
         return jsonify({'success': False, 'message': 'เลขประจำตัวประชาชนต้องเป็นตัวเลข 13 หลัก'}), 400
 
     conn = get_db_connection()
-    cursor = conn.cursor()
 
-    # 1. Check duplicate ID card
-    cursor.execute('SELECT donor_id FROM donors WHERE id_card = ?', (id_card,))
-    if cursor.fetchone():
+    # 1. Check duplicate ID card in users table
+    existing_user = User.get_by_id_card(conn, id_card)
+    if existing_user:
         conn.close()
-        return jsonify({'success': False, 'message': '⚠️ เลขประจำตัวประชาชนนี้ถูกลงทะเบียนในระบบเรียบร้อยแล้ว'}), 400
+        return jsonify({'success': False, 'message': '⚠️ เลขประจำตัวประชาชนนี้ลงทะเบียนบัญชีผู้ใช้ในระบบไว้แล้ว สามารถเข้าสู่ระบบได้ทันที'}), 400
 
     try:
-        initial_status = 'pending'
-        hashed_pass = generate_password_hash(password)
-        cursor.execute('''
-        INSERT INTO donors (id_card, name, age, gender, weight, blood_type, rh_factor, phone, email, address, donation_count, status, password)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
-        ''', (id_card, name, age, gender, weight, blood_type, rh_factor, phone, email, address, initial_status, hashed_pass))
-        
-        donor_id = cursor.lastrowid
-        conn.commit()
-
-        cursor.execute('SELECT * FROM donors WHERE donor_id = ?', (donor_id,))
-        created_row = cursor.fetchone()
-        created_donor = Donor.from_row(created_row).to_dict()
+        user_obj = User.create(conn, id_card, name, phone, email, password)
         conn.close()
 
         return jsonify({
             'success': True,
-            'message': f'สมัครสมาชิกสำเร็จ! ยินดีต้อนรับคุณ {name} (รอเจ้าหน้าที่ Admin ตรวจสอบและอนุมัติ)',
-            'donor': created_donor
+            'message': f'สมัครสมาชิกผู้ใช้งานสำเร็จ! ยินดีต้อนรับคุณ {name} (หากต้องการบริจาคโลหิต สามารถลงทะเบียนประวัติบริจาคเพิ่มเติมได้)',
+            'user': user_obj.to_dict()
         }), 201
 
     except Exception as e:
         conn.close()
-        return jsonify({'success': False, 'message': 'เลขบัตรประชาชนหรือชื่อ-นามสกุลนี้ถูกสมัครสมาชิกในระบบไว้แล้ว'}), 400
+        return jsonify({'success': False, 'message': f'เกิดข้อผิดพลาดในการสมัครสมาชิก: {str(e)}'}), 400
 
 
 @app.route('/api/login', methods=['POST'])
@@ -97,7 +78,7 @@ def handle_login():
         if admin_obj and admin_obj.check_password(password):
             return jsonify({
                 'success': True,
-                'message': f'เข้าสู่ระบบ Admin ({admin_obj.username}) สำเร็จ (ยืนยันจาก SQLite DB)',
+                'message': f'เข้าสู่ระบบ Admin ({admin_obj.username}) สำเร็จ',
                 'role': 'admin',
                 'token': f'token_admin_{admin_obj.username}',
                 'user': admin_obj.to_dict()
@@ -121,13 +102,29 @@ def handle_login():
                 'message': 'ชื่อผู้ใช้หรือรหัสผ่าน Admin ไม่ถูกต้อง (ใช้อันใดอันหนึ่ง: admin / 6812732101)'
             }), 401
 
-    # 2. General Read-Only User Login Check
+    # 2. General Portal User Login Check
     if login_type == 'user' or username == 'user' or id_card:
         search_card = id_card or username
 
-        # Option A: Login via Donor ID Card (13 digits)
+        # Option A: Login via User Account ID Card (13 digits)
         if len(search_card) == 13:
             conn = get_db_connection()
+            user_obj = User.get_by_id_card(conn, search_card)
+            
+            if user_obj:
+                if password and not user_obj.check_password(password):
+                    conn.close()
+                    return jsonify({'success': False, 'message': 'รหัสผ่านผู้ใช้ไม่ถูกต้อง'}), 401
+                conn.close()
+                return jsonify({
+                    'success': True,
+                    'message': f'เข้าสู่ระบบในฐานะผู้ใช้งานคุณ {user_obj.name}',
+                    'role': 'user',
+                    'token': f'token_user_{user_obj.user_id}',
+                    'user': user_obj.to_dict()
+                })
+
+            # Fallback Option A2: Check Donor ID Card if existing legacy donor account
             cursor = conn.cursor()
             cursor.execute('SELECT * FROM donors WHERE id_card = ?', (search_card,))
             row = cursor.fetchone()
@@ -139,9 +136,8 @@ def handle_login():
                     return jsonify({'success': False, 'message': 'รหัสผ่านผู้ใช้ไม่ถูกต้อง'}), 401
 
                 return jsonify({
-
                     'success': True,
-                    'message': f'เข้าสู่ระบบในฐานะผู้บริจาคคุณ {donor.name} (อ่านได้อย่างเดียว)',
+                    'message': f'เข้าสู่ระบบในฐานะผู้บริจาคคุณ {donor.name}',
                     'role': 'user',
                     'token': f'token_user_{donor.donor_id}',
                     'user': {
@@ -153,17 +149,16 @@ def handle_login():
                     }
                 })
 
-
         # Option B: General Demo User (user / 1234)
         if (username == 'user' or not username) and (password == '1234' or not password):
             return jsonify({
                 'success': True,
-                'message': 'เข้าสู่ระบบในฐานะผู้ใช้งานทั่วไป (อ่านได้อย่างเดียว)',
+                'message': 'เข้าสู่ระบบในฐานะผู้ใช้งานทั่วไป',
                 'role': 'user',
                 'token': 'token_user_general',
                 'user': {
                     'username': 'user',
-                    'name': 'ผู้ใช้งานทั่วไป (Read-Only)',
+                    'name': 'ผู้ใช้งานทั่วไป',
                     'role': 'user'
                 }
             })
@@ -261,7 +256,7 @@ def recommend_inventory():
 def get_donors():
     search_q = request.args.get('q', '').strip()
     blood_type_filter = request.args.get('blood_type', '').strip()
-    status_filter = request.args.get('status', '').strip()
+    status_filter = request.args.get('status', 'approved').strip()  # Default to approved donors
 
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -277,7 +272,7 @@ def get_donors():
         query += ' AND blood_type = ?'
         params.append(blood_type_filter)
 
-    if status_filter:
+    if status_filter and status_filter.lower() != 'all':
         query += ' AND status = ?'
         params.append(status_filter)
 

@@ -139,18 +139,9 @@ function initSignUpForm() {
         const name = document.getElementById('signup-name').value.trim();
         const password = document.getElementById('signup-password').value.trim();
         const phone = document.getElementById('signup-phone').value.trim();
-        const bloodType = document.getElementById('signup-blood-type').value;
-        const weight = parseFloat(document.getElementById('signup-weight').value);
-        const age = parseInt(document.getElementById('signup-age').value);
-        const gender = document.getElementById('signup-gender').value;
 
         if (idCard.length !== 13) {
             showToast('⚠️ เลขประจำตัวประชาชนต้องเป็นตัวเลข 13 หลัก');
-            return;
-        }
-
-        if (weight < 45.0) {
-            showToast('⚠️ น้ำหนักตัวต้องไม่น้อยกว่า 45 กิโลกรัม');
             return;
         }
 
@@ -158,11 +149,7 @@ function initSignUpForm() {
             id_card: idCard,
             name: name,
             password: password,
-            phone: phone,
-            blood_type: bloodType,
-            weight: weight,
-            age: age,
-            gender: gender
+            phone: phone
         };
 
         try {
@@ -174,24 +161,19 @@ function initSignUpForm() {
 
             const data = await res.json();
             if (res.ok && data.success) {
-                showToast(`🎉 สมัครสมาชิกสำเร็จ!`);
+                showToast(`🎉 สมัครสมาชิกผู้ใช้งานสำเร็จ!`);
                 signupForm.reset();
                 
-                // Auto-login user immediately without needing to re-login or restart server
+                // Auto-login user immediately
                 localStorage.setItem('userRole', 'user');
                 localStorage.setItem('userName', name);
-                localStorage.setItem('userIdCard', data.donor?.id_card || idCard);
+                localStorage.setItem('userIdCard', data.user?.id_card || idCard);
                 setRoleState('user', name);
                 closeLoginModal();
-                showToast(`👤 เข้าสู่ระบบในฐานะคุณ ${name} เรียบร้อยแล้ว!`);
+                showToast(`👤 เข้าสู่ระบบในฐานะคุณ ${name} เรียบร้อยแล้ว! (หากต้องการบริจาคโลหิต สามารถกรอกแบบฟอร์มลงทะเบียนได้)`);
 
                 loadDashboardStats();
-
-                loadPendingDonors();
-                loadDonorsList();
-                populateDonorSelects();
             } else {
-
                 showToast(`❌ ${data.message || 'เกิดข้อผิดพลาดในการสมัครสมาชิก'}`);
             }
         } catch (err) {
