@@ -9,6 +9,10 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/style.css">
+    <!-- Chart.js for Dashboard Visualizations -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <!-- html2pdf.js for E-Certificate PDF Generation -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 </head>
 <body>
     <!-- Top Navigation Header -->
@@ -25,21 +29,28 @@
                 <button class="nav-btn active" data-tab="dashboard">📊 ภาพรวม</button>
                 <button class="nav-btn" data-tab="inventory">🏥 คงคลังโลหิต</button>
                 <button class="nav-btn" data-tab="recommendations">💡 ระบบแนะนำ</button>
+                <button class="nav-btn" data-tab="appointments">📅 นัดหมายบริจาค</button>
                 <button class="nav-btn" data-tab="register">📝 ลงทะเบียน</button>
                 <button class="nav-btn" data-tab="workflow">⏱️ ขั้นตอนบริจาค</button>
                 <button class="nav-btn" data-tab="record">💉 บันทึกการบริจาค</button>
                 <button class="nav-btn" data-tab="milestones">🏆 สวัสดิการ & เข็มเชิดชูเกียรติ</button>
                 <button class="nav-btn" data-tab="guidelines">📋 ข้อปฏิบัติก่อน-หลัง</button>
+                <button class="nav-btn" data-tab="stations-map">🗺️ พิกัดศูนย์บริจาค</button>
+                <button class="nav-btn admin-only hidden" data-tab="audit-logs">📜 ประวัติงาน & รายงาน</button>
                 <button class="nav-btn" data-tab="donors-list">👥 รายชื่อผู้บริจาค <span id="nav-pending-badge" class="badge-count hidden">0</span></button>
             </nav>
+
+
             <div class="header-actions">
                 <!-- User Status Badges -->
-                <div id="user-status-badge" class="role-badge user-role-badge hidden">
-                    <span>👤 <span id="user-display-name">ผู้ใช้งานทั่วไป</span> <small>(อ่านอย่างเดียว)</small></span>
+                <div id="user-status-badge" class="role-badge user-role-badge hidden" style="display:flex; align-items:center; gap:8px;">
+                    <span>👤 <span id="user-display-name">ผู้ใช้งานทั่วไป</span></span>
+                    <button onclick="openMyProfileEditModal()" class="btn btn-warning btn-sm" style="padding: 3px 8px; font-size: 0.8rem;" title="แก้ไขข้อมูลส่วนตัวของคุณ">✏️ แก้ไขข้อมูลส่วนตัว</button>
                     <button onclick="logoutRole()" class="btn-logout" title="ออกจากระบบ">🚪 ออกจากระบบ</button>
                 </div>
+
                 <div id="admin-status-badge" class="role-badge admin-role-badge hidden">
-                    <span>👤 Admin: <strong>6812732101</strong></span>
+                    <span>👤 Admin: <strong id="admin-display-name">6812732101</strong></span>
                     <button onclick="logoutRole()" class="btn-logout" title="ออกจากระบบ Admin">🚪 ออกจากระบบ</button>
                 </div>
                 <button id="open-login-btn" class="btn btn-secondary btn-sm" onclick="openLoginModal()">🔑 เข้าสู่ระบบ / สมัครสมาชิก</button>
@@ -101,8 +112,41 @@
                 </div>
             </div>
 
+            <!-- Dashboard 90-Day Due Donors Notification Widget -->
+            <div id="due-notifications-card" class="glass-card margin-bottom-25" style="margin-top: 25px; border-left: 5px solid #22c55e;">
+                <div class="card-header" style="display:flex; justify-content:space-between; align-items:center;">
+                    <h3>🔔 แจ้งเตือนผู้บริจาคที่ครบรอบ 90 วันและพร้อมบริจาคได้ทันที (<span id="due-count-badge">0</span> ท่าน)</h3>
+                    <button class="btn btn-secondary btn-sm" onclick="loadDueNotifications()">🔄 รีเฟรช</button>
+                </div>
+                <div id="due-donors-list" style="margin-top: 15px; display:grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px;">
+                    <p style="color:#94a3b8;">กำลังตรวจสอบข้อมูล...</p>
+                </div>
+            </div>
+
+            <!-- Dashboard Interactive Charts Row (Chart.js) -->
+            <div class="dashboard-grid margin-bottom-25" style="margin-top: 25px;">
+
+                <div class="glass-card">
+                    <div class="card-header">
+                        <h3>📊 สัดส่วนคงคลังโลหิตสำรองตามหมู่เลือด (Blood Group Stock Distribution)</h3>
+                    </div>
+                    <div style="position: relative; height: 260px; width: 100%;">
+                        <canvas id="inventoryDoughnutChart"></canvas>
+                    </div>
+                </div>
+                <div class="glass-card">
+                    <div class="card-header">
+                        <h3>🏆 ผู้บริจาคที่บรรลุเข็มเชิดชูเกียรติแต่ละขั้น (Milestone Achievements)</h3>
+                    </div>
+                    <div style="position: relative; height: 260px; width: 100%;">
+                        <canvas id="milestoneBarChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
             <!-- Dashboard Row: Eligibility Quick Checker & Basic Rewards -->
             <div class="dashboard-grid">
+
                 <!-- Eligibility Quick Checker Widget -->
                 <div class="glass-card">
                     <div class="card-header">
@@ -309,8 +353,138 @@
             </div>
         </section>
 
+        <!-- TAB 3.5: APPOINTMENT BOOKING SYSTEM -->
+        <section id="tab-appointments" class="tab-pane">
+            <div class="page-title">
+                <h2>📅 ระบบนัดหมายจองคิวบริจาคโลหิตล่วงหน้า (Appointment Booking)</h2>
+                <p>เลือกวัน เวลา และสถานที่นัดหมายล่วงหน้า ลดเวลารอคิว และตรวจสอบสิทธิ์ระยะเว้น 90 วันอัตโนมัติ</p>
+            </div>
+
+            <div class="dashboard-grid">
+                <!-- Appointment Form -->
+                <div class="glass-card">
+                    <div class="card-header">
+                        <h3>📝 ฟอร์มจองคิวนัดหมายบริจาคเลือด</h3>
+                    </div>
+                    <form id="appointment-booking-form">
+                        <div class="form-group" style="margin-bottom: 15px;">
+                            <label for="app-idcard-input">ค้นหาผู้บริจาคด้วยเลขบัตรประชาชน (13 หลัก) <span class="required">*</span></label>
+                            <div style="display: flex; gap: 10px;">
+                                <input type="text" id="app-idcard-input" placeholder="พิมพ์เลขบัตรประชาชน 13 หลัก เช่น 1100100999888" maxlength="13" required style="flex: 1;">
+                                <button type="button" class="btn btn-secondary" onclick="searchDonorByIdCardForAppointment()">🔍 ค้นหา</button>
+                            </div>
+                            <input type="hidden" id="app-donor-id">
+                            <div id="app-donor-preview-box" class="result-box pass hidden" style="margin-top: 10px; padding: 10px 14px; font-size: 0.9rem; display:flex; align-items:center; gap:10px;">
+                                <span style="font-size: 1.4rem;">👤</span>
+                                <div id="app-donor-info-text">กำลังค้นหา...</div>
+                            </div>
+                        </div>
+
+
+                        <div class="form-row" style="display: flex; gap: 15px; margin-bottom: 15px;">
+                            <div class="form-group" style="flex: 1;">
+                                <label for="app-date">วันที่ต้องการนัดหมาย <span class="required">*</span></label>
+                                <input type="date" id="app-date" required>
+                            </div>
+                            <div class="form-group" style="flex: 1;">
+                                <label for="app-time-slot">เลือกรอบเวลา (Time Slot) <span class="required">*</span></label>
+                                <select id="app-time-slot" required>
+                                    <option value="08:30 - 09:30">🌅 08:30 - 09:30 น. (รอบเช้าตรู่)</option>
+                                    <option value="09:30 - 10:30">☀️ 09:30 - 10:30 น. (รอบเช้าสาย)</option>
+                                    <option value="10:30 - 11:30">🌤️ 10:30 - 11:30 น. (รอบก่อนเที่ยง)</option>
+                                    <option value="11:30 - 12:30">🍱 11:30 - 12:30 น. (รอบเที่ยงวัน)</option>
+                                    <option value="13:00 - 14:00">☕ 13:00 - 14:00 น. (รอบบ่ายต้น)</option>
+                                    <option value="14:00 - 15:00">🍵 14:00 - 15:00 น. (รอบบ่ายกลาง)</option>
+                                    <option value="15:00 - 16:00">🌇 15:00 - 16:00 น. (รอบบ่ายแก่)</option>
+                                    <option value="16:00 - 17:00">🌆 16:00 - 17:00 น. (รอบเย็นหลังเลิกงาน)</option>
+                                    <option value="17:00 - 18:30">🌙 17:00 - 18:30 น. (รอบค่ำพิเศษ)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="form-group" style="margin-bottom: 15px;">
+                            <label for="app-location">สถานที่บริจาคโลหิต <span class="required">* (เลือกศูนย์/สถานี/โรงพยาบาล)</span></label>
+                            <select id="app-location" required>
+                                <optgroup label="🔴 ศูนย์บริการโลหิตแห่งชาติ & ภาคบริการโลหิตแห่งชาติ">
+                                    <option value="ศูนย์บริการโลหิตแห่งชาติ สภากาชาดไทย (ถนนอังรีดูนังต์)">ศูนย์บริการโลหิตแห่งชาติ สภากาชาดไทย (ถนนอังรีดูนังต์)</option>
+                                    <option value="ภาคบริการโลหิตแห่งชาติ ที่ 2 จ.ชลบุรี">ภาคบริการโลหิตแห่งชาติ ที่ 2 จ.ชลบุรี</option>
+                                    <option value="ภาคบริการโลหิตแห่งชาติ ที่ 3 จ.นครราชสีมา">ภาคบริการโลหิตแห่งชาติ ที่ 3 จ.นครราชสีมา</option>
+                                    <option value="ภาคบริการโลหิตแห่งชาติ ที่ 5 จ.นครสวรรค์">ภาคบริการโลหิตแห่งชาติ ที่ 5 จ.นครสวรรค์</option>
+                                    <option value="ภาคบริการโลหิตแห่งชาติ ที่ 6 จ.เชียงใหม่">ภาคบริการโลหิตแห่งชาติ ที่ 6 จ.เชียงใหม่</option>
+                                    <option value="ภาคบริการโลหิตแห่งชาติ ที่ 10 จ.ภูเก็ต">ภาคบริการโลหิตแห่งชาติ ที่ 10 จ.ภูเก็ต</option>
+                                    <option value="ภาคบริการโลหิตแห่งชาติ ที่ 12 จ.สงขลา">ภาคบริการโลหิตแห่งชาติ ที่ 12 จ.สงขลา</option>
+                                </optgroup>
+                                <optgroup label="🏢 หน่วยรับบริจาคประจำที่ในศูนย์การค้า (Fixed Station in Malls)">
+                                    <option value="สถานีกาชาด เดอะมอลล์ บางกะปิ (ชั้น 3)">สถานีกาชาด เดอะมอลล์ บางกะปิ (ชั้น 3)</option>
+                                    <option value="สถานีกาชาด เดอะมอลล์ งามวงศ์วาน (ชั้น 5)">สถานีกาชาด เดอะมอลล์ งามวงศ์วาน (ชั้น 5)</option>
+                                    <option value="สถานีกาชาด เดอะมอลล์ บางแค (ชั้น P)">สถานีกาชาด เดอะมอลล์ บางแค (ชั้น P)</option>
+                                    <option value="สถานีกาชาด เดอะมอลล์ ท่าพระ (ชั้น 1)">สถานีกาชาด เดอะมอลล์ ท่าพระ (ชั้น 1)</option>
+                                    <option value="ศูนย์การค้า ดิ เอ็มโพเรียม (Emporium ชั้น M)">ศูนย์การค้า ดิ เอ็มโพเรียม (Emporium ชั้น M)</option>
+                                    <option value="ศูนย์การค้า ฟิวเจอร์พาร์ค รังสิต (Future Park ชั้น 3)">ศูนย์การค้า ฟิวเจอร์พาร์ค รังสิต (Future Park ชั้น 3)</option>
+                                    <option value="ศูนย์การค้า แฟชั่นไอส์แลนด์ (Fashion Island ชั้น 3)">ศูนย์การค้า แฟชั่นไอส์แลนด์ (Fashion Island ชั้น 3)</option>
+                                </optgroup>
+                                <optgroup label="🏥 ธนาคารเลือด โรงพยาบาลใหญ่">
+                                    <option value="ธนาคารเลือด โรงพยาบาลจุฬาลงกรณ์ (ตึกภูมิสิริมังคลานุสรณ์)">ธนาคารเลือด โรงพยาบาลจุฬาลงกรณ์ (ตึกภูมิสิริมังคลานุสรณ์)</option>
+                                    <option value="ธนาคารเลือด โรงพยาบาลศิริราช (ตึก 72 ปี ชั้น 3)">ธนาคารเลือด โรงพยาบาลศิริราช (ตึก 72 ปี ชั้น 3)</option>
+                                    <option value="ธนาคารเลือด โรงพยาบาลรามาธิบดี">ธนาคารเลือด โรงพยาบาลรามาธิบดี</option>
+                                    <option value="ธนาคารเลือด โรงพยาบาลพระมงกุฎเกล้า">ธนาคารเลือด โรงพยาบาลพระมงกุฎเกล้า</option>
+                                    <option value="ธนาคารเลือด โรงพยาบาลธรรมศาสตร์เฉลิมพระเกียรติ">ธนาคารเลือด โรงพยาบาลธรรมศาสตร์เฉลิมพระเกียรติ</option>
+                                </optgroup>
+                                <optgroup label="🚌 หน่วยรับบริจาคเคลื่อนที่">
+                                    <option value="หน่วยรับบริจาคโลหิตเคลื่อนที่ (Mobile Unit Project)">หน่วยรับบริจาคโลหิตเคลื่อนที่ (Mobile Unit Project)</option>
+                                </optgroup>
+                            </select>
+                        </div>
+
+                        <div class="form-row" style="display: flex; gap: 15px; margin-bottom: 15px;">
+                            <div class="form-group" style="flex: 1;">
+                                <label for="app-donation-type">ประเภทการบริจาคโลหิต <span class="required">*</span></label>
+                                <select id="app-donation-type" required>
+                                    <option value="บริจาคโลหิตรวม">🩸 บริจาคโลหิตรวม (Whole Blood 350-450 ml)</option>
+                                    <option value="บริจาคพลาสม่า">🧪 บริจาคพลาสม่า (Plasma Apheresis)</option>
+                                    <option value="บริจาคเกล็ดเลือด">✨ บริจาคเกล็ดเลือด (Plateletpheresis)</option>
+                                    <option value="บริจาคเม็ดเลือดแดงเฉพาะส่วน">🔴 บริจาคเม็ดเลือดแดงเฉพาะส่วน (Red Cell Apheresis)</option>
+                                </select>
+                            </div>
+                            <div class="form-group" style="flex: 1;">
+                                <label for="app-purpose">วัตถุประสงค์การบริจาค <span class="required">*</span></label>
+                                <select id="app-purpose" required>
+                                    <option value="บริจาคโลหิตทั่วไปเพื่อคลังสำรอง">❤️ บริจาคโลหิตทั่วไปเพื่อคลังสำรอง</option>
+                                    <option value="บริจาคเนื่องในวันสำคัญ / แคมเปญพิเศษ">🎗️ บริจาคเนื่องในวันสำคัญ / แคมเปญพิเศษ</option>
+                                    <option value="บริจาคระบุเจาะจงให้ผู้ป่วยเฉพาะราย">🏥 บริจาคระบุเจาะจงให้ผู้ป่วยเฉพาะราย</option>
+                                    <option value="บริจาคโลหิตสำรองล่วงหน้าให้ตนเอง/ญาติ">🛡️ บริจาคโลหิตสำรองล่วงหน้าให้ตนเอง/ญาติ</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="form-group" style="margin-bottom: 20px;">
+                            <label for="app-notes">หมายเหตุเพิ่มเติม</label>
+                            <textarea id="app-notes" rows="2" placeholder="เช่น ขอแจ้งเตือนผ่าน SMS / สังเกตอาการแพ้ยา / ระบุชื่อผู้ป่วยกรณีบริจาคให้ผู้ป่วยเฉพาะราย"></textarea>
+                        </div>
+
+
+                        <div class="form-actions">
+                            <button type="submit" class="btn btn-primary btn-lg">📅 ยืนยันการจองคิวนัดหมาย</button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Appointments List -->
+                <div class="glass-card">
+                    <div class="card-header" style="display:flex; justify-content:space-between; align-items:center;">
+                        <h3>📋 รายการนัดหมายบริจาคโลหิตล่าสุด</h3>
+                        <button class="btn btn-secondary btn-sm" onclick="loadAppointmentsList()">🔄 รีเฟรช</button>
+                    </div>
+                    <div id="appointments-container" class="appointments-list">
+                        <p style="text-align: center; color: #94a3b8; padding: 20px;">กำลังโหลดรายการนัดหมาย...</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
         <!-- TAB 4: REGISTER DONOR -->
         <section id="tab-register" class="tab-pane">
+
             <div class="page-title">
                 <h2>📝 แบบฟอร์มลงทะเบียนผู้บริจาคเลือดใหม่</h2>
                 <p>กรอกข้อมูลประวัติส่วนตัวและแบบสอบถามสุขภาพตามความจริง เพื่อความปลอดภัยของผู้บริจาคและผู้รับเลือด</p>
@@ -480,8 +654,12 @@
             <div class="glass-card max-w-800">
                 <form id="record-donation-form">
                     <div class="form-group">
-                        <label for="rec-donor-select">เลือกรหัส/ชื่อผู้บริจาค <span class="required">*</span></label>
-                        <select id="rec-donor-select" required>
+                        <label for="rec-idcard-input">ค้นหาผู้บริจาคด้วยเลขบัตรประชาชน (13 หลัก) <span class="required">*</span></label>
+                        <div style="display: flex; gap: 10px;">
+                            <input type="text" id="rec-idcard-input" placeholder="พิมพ์เลขบัตรประชาชน 13 หลัก เช่น 1100100999888" maxlength="13" required style="flex: 1;">
+                            <button type="button" class="btn btn-secondary" onclick="searchDonorByIdCardForRecord()">🔍 ค้นหา</button>
+                        </div>
+                        <select id="rec-donor-select" class="hidden">
                             <option value="">-- กรุณาเลือกผู้บริจาค --</option>
                         </select>
                     </div>
@@ -535,11 +713,14 @@
                 <div class="card-header">
                     <h3>🔍 ตรวจสอบสวัสดิการรายบุคคล (Individual Donor Benefit Lookup)</h3>
                 </div>
-                <div class="lookup-bar">
-                    <select id="lookup-donor-select">
+                <div class="lookup-bar" style="display: flex; gap: 10px; margin-bottom: 20px;">
+                    <input type="text" id="lookup-idcard-input" placeholder="พิมพ์เลขบัตรประชาชน 13 หลักเพื่อค้นหาสวัสดิการ..." maxlength="13" style="flex: 1; padding: 12px; border-radius: var(--radius-md); border: 1px solid var(--card-border);">
+                    <button type="button" class="btn btn-primary" onclick="searchDonorByIdCardForMilestones()">🔍 ค้นหาสวัสดิการ</button>
+                    <select id="lookup-donor-select" class="hidden">
                         <option value="">-- เลือกผู้บริจาคเพื่อเช็กสวัสดิการ --</option>
                     </select>
                 </div>
+
                 <div id="lookup-result-display" class="lookup-results hidden">
                     <div class="progress-box">
                         <div class="progress-info">
@@ -841,7 +1022,79 @@
                 </div>
             </div>
         </section>
+
+        <!-- TAB 8: STATIONS MAP & LOCATOR -->
+        <section id="tab-stations-map" class="tab-pane">
+            <div class="page-title">
+                <h2>🗺️ พิกัดศูนย์บริการโลหิตสภากาชาด 20 แห่ง (Live Station Locator)</h2>
+                <p>ค้นหาพิกัด เบอร์โทรติดต่อ เวลาทำการ และสถานะเปิดบริการของศูนย์บริการโลหิตและสถานีกาชาดทั่วประเทศ</p>
+            </div>
+
+            <div class="glass-card margin-bottom-20">
+                <div class="form-row" style="display:flex; gap:15px; align-items:center;">
+                    <div class="form-group" style="flex:1;">
+                        <input type="text" id="station-search-input" placeholder="🔍 ค้นหาสถานีรับบริจาค เช่น บางกะปิ, จุฬา, ชลบุรี, เชียงใหม่..." oninput="renderStationsList()">
+                    </div>
+                    <div class="form-group" style="width:220px;">
+                        <select id="station-region-filter" onchange="renderStationsList()">
+                            <option value="">-- ทุกภูมิภาค (20 แห่ง) --</option>
+                            <option value="กรุงเทพและปริมณฑล">กรุงเทพและปริมณฑล</option>
+                            <option value="ภาคกลาง">ภาคกลาง / ตะวันออก</option>
+                            <option value="ภาคเหนือ">ภาคเหนือ</option>
+                            <option value="ภาคอีสาน">ภาคอีสาน</option>
+                            <option value="ภาคใต้">ภาคใต้</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div id="stations-grid" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px;">
+                <!-- Dynamically populated station cards -->
+            </div>
+        </section>
+
+        <!-- TAB 9: AUDIT LOGS & EXPORT CENTER -->
+        <section id="tab-audit-logs" class="tab-pane">
+            <div class="page-title">
+                <h2>📜 บันทึกประวัติการทำงานเจ้าหน้าที่ & ศูนย์ส่งออกรายงาน (Audit Trail & Export Center)</h2>
+                <p>ตรวจสอบประวัติการทำรายการย้อนหลังของเจ้าหน้าที่ Admin และส่งออกไฟล์รายงานคลังเลือดและรายชื่อผู้บริจาค</p>
+            </div>
+
+            <div class="glass-card margin-bottom-25" style="background: rgba(255,255,255,0.85);">
+                <div class="card-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+                    <h3>📊 ศูนย์ส่งออกรายงานข้อมูล (Data Export Center)</h3>
+                </div>
+                <div style="display:flex; gap:15px; margin-top:15px; flex-wrap:wrap;">
+                    <a href="/api/export/inventory-csv" target="_blank" class="btn btn-primary">📊 ดาวน์โหลดรายงานสรุปคลังเลือด (CSV/Excel)</a>
+                    <a href="/api/export/donors-csv" target="_blank" class="btn btn-secondary">👥 ดาวน์โหลดรายงานรายชื่อผู้บริจาค (CSV/Excel)</a>
+                </div>
+            </div>
+
+            <div class="glass-card">
+                <div class="card-header" style="display:flex; justify-content:space-between; align-items:center;">
+                    <h3>📜 ประวัติการทำรายการล่าสุด (Live Admin Activity Logs)</h3>
+                    <button class="btn btn-secondary btn-sm" onclick="loadAuditLogs()">🔄 รีเฟรชประวัติ</button>
+                </div>
+                <div class="table-responsive margin-top-15">
+                    <table class="data-table small">
+                        <thead>
+                            <tr>
+                                <th>Log ID</th>
+                                <th>เวลาทำรายการ</th>
+                                <th>เจ้าหน้าที่ Admin</th>
+                                <th>ประเภทรายการ</th>
+                                <th>รายละเอียด</th>
+                            </tr>
+                        </thead>
+                        <tbody id="audit-logs-table-body">
+                            <tr><td colspan="5" style="text-align:center; padding:20px; color:#94a3b8;">กำลังโหลดประวัติ...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
     </main>
+
 
     <!-- UNIFIED LOGIN & SIGN UP MODAL (3 TABS) -->
     <div id="login-modal" class="modal-overlay hidden">
@@ -956,9 +1209,10 @@
             <div class="modal-header">
                 <div class="modal-avatar">✏️</div>
                 <div class="modal-donor-title">
-                    <h3>ตรวจสอบและแก้ไขข้อมูลผู้บริจาค (Admin Mode)</h3>
+                    <h3 id="edit-donor-title">✏️ แก้ไขข้อมูลส่วนตัวผู้บริจาค</h3>
                     <p id="edit-donor-subtitle">รหัสผู้บริจาค: # -</p>
                 </div>
+
             </div>
             <form id="edit-donor-form">
                 <input type="hidden" id="edit-donor-id">
@@ -1115,9 +1369,11 @@
                 </div>
             </div>
             <div class="modal-footer print-actions">
+                <button class="btn btn-warning" onclick="openEditDonorModalFromDigitalCard()">✏️ แก้ไขข้อมูลส่วนตัว</button>
                 <button class="btn btn-primary" onclick="window.print()">🖨️ พิมพ์บัตรประจำตัว</button>
                 <button class="btn btn-secondary" onclick="closeDigitalCardModal()">ปิด</button>
             </div>
+
         </div>
     </div>
 
@@ -1148,11 +1404,13 @@
                 </div>
             </div>
             <div class="modal-footer print-actions">
+                <button class="btn btn-success" onclick="downloadCertificatePDF()">📥 ดาวน์โหลดใบประกาศเกียรติคุณ (PDF)</button>
                 <button class="btn btn-primary" onclick="window.print()">🖨️ พิมพ์ใบประกาศเกียรติคุณ</button>
                 <button class="btn btn-secondary" onclick="closeCertificateModal()">ปิด</button>
             </div>
         </div>
     </div>
+
 
     <!-- SUCCESS NOTIFICATION TOAST -->
     <div id="toast" class="toast hidden"></div>

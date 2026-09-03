@@ -1430,8 +1430,19 @@ body {
     margin-top: 20px;
 }
 
+.btn-success {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    color: #ffffff;
+    border: none;
+}
+.btn-success:hover {
+    background: linear-gradient(135deg, #059669 0%, #047857 100%);
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+
 .text-crimson { color: var(--primary-crimson); }
 .hidden { display: none !important; }
+
 .margin-bottom-25 { margin-bottom: 25px; }
 .margin-top-15 { margin-top: 15px; }
 .margin-top-25 { margin-top: 25px; }

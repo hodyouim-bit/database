@@ -17,6 +17,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initMilestoneLookup();
     initDonorsDirectory();
     initEditDonorForm();
+    initAppointmentBooking();
 
     // Initial data load
     loadDashboardStats();
@@ -25,11 +26,19 @@ document.addEventListener('DOMContentLoaded', () => {
     loadPendingDonors();
     populateDonorSelects();
 
+    // Real-time Live Polling Auto-Refresh (every 5 seconds)
+    setInterval(() => {
+        loadDashboardStats();
+        loadBloodInventory();
+    }, 5000);
+
     const recDateInput = document.getElementById('rec-date');
     if (recDateInput) {
         recDateInput.value = new Date().toISOString().split('T')[0];
     }
 });
+
+
 
 /* ==========================================================================
    1. Dual-Role Authentication & Session Management
@@ -64,6 +73,7 @@ function initRoleAuth() {
                 if (res.ok && data.success) {
                     localStorage.setItem('userRole', 'user');
                     localStorage.setItem('userName', data.user.name);
+                    localStorage.setItem('userIdCard', data.user.id_card || inputVal);
                     setRoleState('user', data.user.name);
                     closeLoginModal();
                     showToast(`👤 ${data.message}`);
@@ -101,6 +111,7 @@ function initRoleAuth() {
                 if (res.ok && data.success) {
                     localStorage.setItem('userRole', 'admin');
                     localStorage.setItem('userName', data.user.name);
+                    localStorage.setItem('userIdCard', data.user.id_card || username);
                     setRoleState('admin', data.user.name);
                     closeLoginModal();
                     showToast(`🔑 ${data.message}`);
@@ -163,17 +174,24 @@ function initSignUpForm() {
 
             const data = await res.json();
             if (res.ok && data.success) {
-                showToast(`🎉 ${data.message}`);
+                showToast(`🎉 สมัครสมาชิกสำเร็จ!`);
                 signupForm.reset();
                 
-                document.getElementById('user-idcard-input').value = idCard;
-                document.getElementById('user-pass-input').value = password;
-                switchLoginTab('user');
+                // Auto-login user immediately without needing to re-login or restart server
+                localStorage.setItem('userRole', 'user');
+                localStorage.setItem('userName', name);
+                localStorage.setItem('userIdCard', data.donor?.id_card || idCard);
+                setRoleState('user', name);
+                closeLoginModal();
+                showToast(`👤 เข้าสู่ระบบในฐานะคุณ ${name} เรียบร้อยแล้ว!`);
 
                 loadDashboardStats();
+
                 loadPendingDonors();
                 loadDonorsList();
+                populateDonorSelects();
             } else {
+
                 showToast(`❌ ${data.message || 'เกิดข้อผิดพลาดในการสมัครสมาชิก'}`);
             }
         } catch (err) {
@@ -196,6 +214,8 @@ function setRoleState(role, displayName = '') {
         if (userBadge) userBadge.classList.add('hidden');
         if (adminBadge) adminBadge.classList.remove('hidden');
         if (pendingCard) pendingCard.classList.remove('hidden');
+        const adminNameSpan = document.getElementById('admin-display-name');
+        if (adminNameSpan) adminNameSpan.textContent = displayName || '6812732101';
     } else if (role === 'user') {
         if (loginBtn) loginBtn.classList.add('hidden');
         if (adminBadge) adminBadge.classList.add('hidden');
@@ -301,12 +321,49 @@ function switchTab(tabId) {
     if (tabId === 'dashboard') loadDashboardStats();
     if (tabId === 'inventory') loadBloodInventory();
     if (tabId === 'recommendations') loadRecommendationsTab();
+    if (tabId === 'appointments') {
+        loadAppointmentsList();
+        const savedUsername = localStorage.getItem('userName');
+        if (savedUsername && savedUsername.length === 13) {
+            const appInput = document.getElementById('app-idcard-input');
+            if (appInput) {
+                appInput.value = savedUsername;
+                searchDonorByIdCardForAppointment();
+            }
+        }
+    }
+    if (tabId === 'record') {
+        const savedUsername = localStorage.getItem('userName');
+        if (savedUsername && savedUsername.length === 13) {
+            const recInput = document.getElementById('rec-idcard-input');
+            if (recInput) {
+                recInput.value = savedUsername;
+                searchDonorByIdCardForRecord();
+            }
+        }
+    }
+    if (tabId === 'milestones') {
+        const savedUsername = localStorage.getItem('userName');
+        if (savedUsername && savedUsername.length === 13) {
+            const lookupInput = document.getElementById('lookup-idcard-input');
+            if (lookupInput) {
+                lookupInput.value = savedUsername;
+                searchDonorByIdCardForMilestones();
+            }
+        }
+    }
     if (tabId === 'donors-list') {
         loadDonorsList();
         loadPendingDonors();
     }
-    if (tabId === 'record' || tabId === 'milestones') populateDonorSelects();
+    if (tabId === 'stations-map') renderStationsList();
+    if (tabId === 'audit-logs') loadAuditLogs();
+    if (tabId === 'record' || tabId === 'milestones' || tabId === 'appointments') populateDonorSelects();
 }
+
+
+
+
 
 /* ==========================================================================
    3. Smart Recommendation Engine Controller
@@ -430,8 +487,14 @@ async function loadDashboardStats() {
                     pendingNavBadge.classList.add('hidden');
                 }
             }
+
+            // Render Chart.js Visualizations & Load Notifications
+            renderDashboardCharts(data);
+            loadDueNotifications();
         }
+
     } catch (err) {
+
         console.error('Error loading dashboard stats:', err);
     }
 }
@@ -617,6 +680,7 @@ async function populateDonorSelects() {
 
             const recSelect = document.getElementById('rec-donor-select');
             const lookupSelect = document.getElementById('lookup-donor-select');
+            const appSelect = document.getElementById('app-donor-select');
 
             let optionsHtml = '<option value="">-- กรุณาเลือกผู้บริจาค --</option>';
             approvedDonors.forEach(d => {
@@ -625,16 +689,46 @@ async function populateDonorSelects() {
 
             if (recSelect) recSelect.innerHTML = optionsHtml;
             if (lookupSelect) lookupSelect.innerHTML = optionsHtml;
+            if (appSelect) appSelect.innerHTML = optionsHtml;
+
         }
     } catch (err) {
         console.error('Error fetching donors list for select:', err);
     }
 }
 
+function searchDonorByIdCardForRecord() {
+    const idCardInput = document.getElementById('rec-idcard-input');
+    const recSelect = document.getElementById('rec-donor-select');
+    if (!idCardInput || !recSelect) return;
+
+    const idCard = idCardInput.value.trim();
+    if (!idCard) return;
+
+    const donor = allDonorsCache.find(d => String(d.id_card).trim() === idCard);
+    if (donor) {
+        recSelect.value = donor.donor_id;
+        recSelect.dispatchEvent(new Event('change'));
+    } else {
+        recSelect.value = '';
+        recSelect.dispatchEvent(new Event('change'));
+        showToast(`❌ ไม่พบข้อมูลผู้บริจาคเลขบัตรประชาชน ${idCard}`);
+    }
+}
+
 function initRecordDonationForm() {
     const recSelect = document.getElementById('rec-donor-select');
+    const recIdCardInput = document.getElementById('rec-idcard-input');
     const previewCard = document.getElementById('donor-preview-card');
     const recForm = document.getElementById('record-donation-form');
+
+    if (recIdCardInput) {
+        recIdCardInput.addEventListener('input', () => {
+            if (recIdCardInput.value.trim().length === 13) {
+                searchDonorByIdCardForRecord();
+            }
+        });
+    }
 
     recSelect.addEventListener('change', () => {
         const donorId = parseInt(recSelect.value);
@@ -665,6 +759,7 @@ function initRecordDonationForm() {
             previewCard.classList.add('hidden');
         }
     });
+
 
     recForm.addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -803,11 +898,6 @@ function initEditDonorForm() {
     editForm.addEventListener('submit', async (e) => {
         e.preventDefault();
 
-        if (currentRole !== 'admin') {
-            showToast('⚠️ สิทธิ์ไม่เพียงพอ: เฉพาะเจ้าหน้าที่ Admin เท่านั้นที่สามารถแก้ไขข้อมูลได้');
-            return;
-        }
-
         const donorId = parseInt(document.getElementById('edit-donor-id').value);
         const idCard = document.getElementById('edit-id-card').value.trim();
         const name = document.getElementById('edit-name').value.trim();
@@ -822,7 +912,11 @@ function initEditDonorForm() {
         const email = document.getElementById('edit-email').value.trim();
         const address = document.getElementById('edit-address').value.trim();
 
+        const loggedInCard = localStorage.getItem('userName') || idCard;
+
         const payload = {
+            requester_role: currentRole,
+            verify_id_card: loggedInCard,
             id_card: idCard, name: name, age: age, gender: gender, weight: weight,
             blood_type: bloodType, rh_factor: rhFactor, phone: phone, donation_count: count,
             last_donation_date: lastDate || null, email: email, address: address
@@ -837,9 +931,10 @@ function initEditDonorForm() {
 
             const data = await res.json();
             if (res.ok && data.success) {
-                showToast(`✅ แก้ไขข้อมูลผู้บริจาคคุณ ${data.donor.name} สำเร็จ!`);
+                showToast(`✅ แก้ไขข้อมูลส่วนตัวคุณ ${data.donor.name} สำเร็จ!`);
                 closeEditDonorModal();
                 closeDonorModal();
+                closeDigitalCardModal();
                 loadDashboardStats();
                 loadBloodInventory();
                 loadPendingDonors();
@@ -856,17 +951,45 @@ function initEditDonorForm() {
 }
 
 function openEditDonorModal(donorId) {
-    if (currentRole !== 'admin') {
-        showToast('⚠️ สิทธิ์ไม่เพียงพอ: เฉพาะเจ้าหน้าที่ Admin เท่านั้นที่สามารถแก้ไขข้อมูลได้');
-        return;
-    }
-
     const donor = allDonorsCache.find(d => d.donor_id === donorId);
     if (!donor) return;
 
+    const loggedInCard = (localStorage.getItem('userIdCard') || '').trim();
+    const loggedInName = (localStorage.getItem('userName') || '').trim();
+
+    // Security check for non-admin user
+    if (currentRole !== 'admin') {
+        const isMatch = (loggedInCard && String(donor.id_card).trim() === loggedInCard) ||
+                        (loggedInName && donor.name.trim() === loggedInName);
+        if (!isMatch) {
+            showToast('⚠️ ไม่อนุญาต: หมายเลขบัตรประชาชนไม่ตรงกัน คุณสามารถแก้ไขได้เฉพาะข้อมูลส่วนตัวของคุณเองเท่านั้น');
+            return;
+        }
+    }
+
+    const idCardInput = document.getElementById('edit-id-card');
+    const countInput = document.getElementById('edit-count');
+    const lastDateInput = document.getElementById('edit-last-date');
+    const titleElem = document.getElementById('edit-donor-title');
+    const subtitle = document.getElementById('edit-donor-subtitle');
+
+    if (currentRole === 'admin') {
+        if (titleElem) titleElem.textContent = '✏️ ตรวจสอบและแก้ไขข้อมูลผู้บริจาค (Admin Mode)';
+        if (subtitle) subtitle.textContent = `รหัสผู้บริจาค: #${donor.donor_id}`;
+        if (idCardInput) idCardInput.disabled = false;
+        if (countInput) countInput.disabled = false;
+        if (lastDateInput) lastDateInput.disabled = false;
+    } else {
+        if (titleElem) titleElem.textContent = '✏️ แก้ไขข้อมูลส่วนตัวผู้บริจาค';
+        if (subtitle) subtitle.textContent = `รหัสผู้บริจาค: #${donor.donor_id}`;
+        if (idCardInput) idCardInput.disabled = true; // Lock ID card for normal user
+        if (countInput) countInput.disabled = true; // Lock donation count
+        if (lastDateInput) lastDateInput.disabled = true; // Lock last donation date
+    }
+
+
     document.getElementById('edit-donor-id').value = donor.donor_id;
-    document.getElementById('edit-donor-subtitle').textContent = `รหัสผู้บริจาค: #${donor.donor_id}`;
-    document.getElementById('edit-id-card').value = donor.id_card;
+    if (idCardInput) idCardInput.value = donor.id_card;
     document.getElementById('edit-name').value = donor.name;
     document.getElementById('edit-age').value = donor.age;
     document.getElementById('edit-gender').value = donor.gender;
@@ -874,8 +997,8 @@ function openEditDonorModal(donorId) {
     document.getElementById('edit-blood-type').value = donor.blood_type;
     document.getElementById('edit-rh').value = donor.rh_factor;
     document.getElementById('edit-phone').value = donor.phone;
-    document.getElementById('edit-count').value = donor.donation_count;
-    document.getElementById('edit-last-date').value = donor.last_donation_date || '';
+    if (countInput) countInput.value = donor.donation_count;
+    if (lastDateInput) lastDateInput.value = donor.last_donation_date || '';
     document.getElementById('edit-email').value = donor.email || '';
     document.getElementById('edit-address').value = donor.address || '';
 
@@ -889,6 +1012,36 @@ function closeEditDonorModal() {
 function openEditDonorModalFromDetail() {
     if (activeModalDonorId) openEditDonorModal(activeModalDonorId);
 }
+
+function openEditDonorModalFromDigitalCard() {
+    if (activeModalDonorId) openEditDonorModal(activeModalDonorId);
+}
+
+function openMyProfileEditModal() {
+    const savedCard = (localStorage.getItem('userIdCard') || '').trim();
+    const savedName = (localStorage.getItem('userName') || '').trim();
+
+    if (!savedCard && !savedName) {
+        showToast('⚠️ กรุณาเข้าสู่ระบบในฐานะผู้บริจาคก่อนทำรายการแก้ไขข้อมูล');
+        return;
+    }
+
+    let donor = null;
+    if (savedCard) {
+        donor = allDonorsCache.find(d => String(d.id_card).trim() === savedCard);
+    }
+    if (!donor && savedName) {
+        donor = allDonorsCache.find(d => d.name.trim() === savedName);
+    }
+
+    if (donor) {
+        openEditDonorModal(donor.donor_id);
+    } else {
+        showToast(`❌ ไม่พบข้อมูลผู้บริจาคในระบบ กรุณาลองเข้าสู่ระบบอีกครั้ง`);
+    }
+}
+
+
 
 async function deleteDonor(donorId) {
     if (currentRole !== 'admin') {
@@ -926,13 +1079,42 @@ function deleteDonorFromDetail() {
     if (activeModalDonorId) deleteDonor(activeModalDonorId);
 }
 
+function searchDonorByIdCardForMilestones() {
+    const idCardInput = document.getElementById('lookup-idcard-input');
+    const lookupSelect = document.getElementById('lookup-donor-select');
+    if (!idCardInput || !lookupSelect) return;
+
+    const idCard = idCardInput.value.trim();
+    if (!idCard) return;
+
+    const donor = allDonorsCache.find(d => String(d.id_card).trim() === idCard);
+    if (donor) {
+        lookupSelect.value = donor.donor_id;
+        lookupSelect.dispatchEvent(new Event('change'));
+    } else {
+        lookupSelect.value = '';
+        lookupSelect.dispatchEvent(new Event('change'));
+        showToast(`❌ ไม่พบข้อมูลผู้บริจาคเลขบัตรประชาชน ${idCard}`);
+    }
+}
+
 /* ==========================================================================
    9. Milestone Lookup
    ========================================================================== */
 function initMilestoneLookup() {
     const lookupSelect = document.getElementById('lookup-donor-select');
+    const lookupInput = document.getElementById('lookup-idcard-input');
     const resultDisplay = document.getElementById('lookup-result-display');
     const container = document.getElementById('lp-milestones-container');
+
+    if (lookupInput) {
+        lookupInput.addEventListener('input', () => {
+            if (lookupInput.value.trim().length === 13) {
+                searchDonorByIdCardForMilestones();
+            }
+        });
+    }
+
 
     lookupSelect.addEventListener('change', () => {
         const donorId = parseInt(lookupSelect.value);
@@ -1254,3 +1436,454 @@ function showToast(message) {
         toast.classList.add('hidden');
     }, 4000);
 }
+
+/* ==========================================================================
+   13. Chart.js Visualizations Controller
+   ========================================================================== */
+let inventoryDoughnutChartInstance = null;
+let milestoneBarChartInstance = null;
+
+function renderDashboardCharts(statsData) {
+    if (typeof Chart === 'undefined') return;
+
+    // 1. Doughnut Chart for Blood Inventory
+    const ctxDoughnut = document.getElementById('inventoryDoughnutChart');
+    if (ctxDoughnut && statsData && statsData.inventory) {
+        const labels = ['หมู่ O', 'หมู่ A', 'หมู่ B', 'หมู่ AB'];
+        const dataValues = [
+            statsData.inventory.O?.bags || 0,
+            statsData.inventory.A?.bags || 0,
+            statsData.inventory.B?.bags || 0,
+            statsData.inventory.AB?.bags || 0
+        ];
+
+        if (inventoryDoughnutChartInstance) {
+            inventoryDoughnutChartInstance.destroy();
+        }
+
+        inventoryDoughnutChartInstance = new Chart(ctxDoughnut, {
+            type: 'doughnut',
+            data: {
+                labels: labels,
+                datasets: [{
+                    data: dataValues,
+                    backgroundColor: ['#ef4444', '#3b82f6', '#f59e0b', '#8b5cf6'],
+                    borderWidth: 2,
+                    borderColor: '#ffffff'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'bottom' }
+                }
+            }
+        });
+    }
+
+    // 2. Bar Chart for Milestone Achievements
+    const ctxBar = document.getElementById('milestoneBarChart');
+    if (ctxBar && statsData && statsData.milestones_achieved) {
+        const milestoneLabels = ['1 - 6 ครั้ง (🏅)', '7 - 23 ครั้ง (🎗️)', '24+ ครั้งขึ้นไป (🥈)'];
+        const milestoneValues = [
+            statsData.milestones_achieved.band_1_6 ?? (statsData.milestones_achieved.count_1 || 0),
+            statsData.milestones_achieved.band_7_23 ?? (statsData.milestones_achieved.count_7 || 0),
+            statsData.milestones_achieved.band_24_plus ?? (statsData.milestones_achieved.count_24 || 0)
+        ];
+
+
+        if (milestoneBarChartInstance) {
+            milestoneBarChartInstance.destroy();
+        }
+
+        milestoneBarChartInstance = new Chart(ctxBar, {
+            type: 'bar',
+            data: {
+                labels: milestoneLabels,
+                datasets: [{
+                    label: 'จำนวนผู้บริจาค (คน)',
+                    data: milestoneValues,
+                    backgroundColor: ['#10b981', '#6366f1', '#f59e0b'],
+                    borderRadius: 6
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: { beginAtZero: true, ticks: { stepSize: 1 } }
+                },
+                plugins: {
+                    legend: { display: false }
+                }
+            }
+        });
+    }
+}
+
+/* ==========================================================================
+   14. Appointment Booking Controller
+   ========================================================================== */
+function searchDonorByIdCardForAppointment() {
+    const idCardInput = document.getElementById('app-idcard-input');
+    const hiddenDonorId = document.getElementById('app-donor-id');
+    const previewBox = document.getElementById('app-donor-preview-box');
+    const infoText = document.getElementById('app-donor-info-text');
+
+    if (!idCardInput || !hiddenDonorId || !previewBox || !infoText) return null;
+
+    const idCard = idCardInput.value.trim();
+    if (!idCard) {
+        previewBox.classList.add('hidden');
+        hiddenDonorId.value = '';
+        return null;
+    }
+
+    let donor = allDonorsCache.find(d => String(d.id_card).trim() === idCard);
+
+    if (donor) {
+        hiddenDonorId.value = donor.donor_id;
+        previewBox.className = 'result-box pass';
+        previewBox.classList.remove('hidden');
+        infoText.innerHTML = `<strong>✅ พบข้อมูลผู้บริจาค:</strong> คุณ <strong>${donor.name}</strong> | หมู่ ${donor.blood_type}${donor.rh_factor || '+'} | อายุ ${donor.age} ปี | บริจาคสะสม ${donor.donation_count} ครั้ง`;
+        return donor;
+    } else {
+        hiddenDonorId.value = '';
+        previewBox.className = 'result-box fail';
+        previewBox.classList.remove('hidden');
+        infoText.innerHTML = `<strong>❌ ไม่พบข้อมูลผู้บริจาค:</strong> ไม่พบรหัสบัตรประชาชน <code>${idCard}</code> ในระบบ (กรุณาลงทะเบียนผู้บริจาคใหม่ก่อนจองคิว)`;
+        return null;
+    }
+}
+
+function initAppointmentBooking() {
+    const appForm = document.getElementById('appointment-booking-form');
+    const appDate = document.getElementById('app-date');
+    const idCardInput = document.getElementById('app-idcard-input');
+
+    if (appDate) {
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        appDate.value = tomorrow.toISOString().split('T')[0];
+        appDate.min = new Date().toISOString().split('T')[0];
+    }
+
+    if (idCardInput) {
+        idCardInput.addEventListener('input', () => {
+            const val = idCardInput.value.trim();
+            if (val.length === 13) {
+                searchDonorByIdCardForAppointment();
+            } else if (val.length === 0) {
+                const previewBox = document.getElementById('app-donor-preview-box');
+                const hiddenDonorId = document.getElementById('app-donor-id');
+                if (previewBox) previewBox.classList.add('hidden');
+                if (hiddenDonorId) hiddenDonorId.value = '';
+            }
+        });
+    }
+
+    if (appForm) {
+        appForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            let donorId = parseInt(document.getElementById('app-donor-id').value);
+            const idCard = document.getElementById('app-idcard-input').value.trim();
+
+            if (!donorId && idCard) {
+                const found = searchDonorByIdCardForAppointment();
+                if (found) donorId = found.donor_id;
+            }
+
+            if (!donorId) {
+                showToast('⚠️ กรุณาระบุเลขบัตรประชาชน 13 หลักที่ลงทะเบียนในระบบเรียบร้อยแล้ว');
+                return;
+            }
+
+            const date = document.getElementById('app-date').value;
+            const slot = document.getElementById('app-time-slot').value;
+            const location = document.getElementById('app-location').value;
+            const donationType = document.getElementById('app-donation-type')?.value || 'บริจาคโลหิตรวม';
+            const purpose = document.getElementById('app-purpose')?.value || 'บริจาคโลหิตทั่วไปเพื่อคลังสำรอง';
+            const notes = document.getElementById('app-notes').value.trim();
+
+            try {
+                const res = await fetch('/api/appointments', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        donor_id: donorId,
+                        appointment_date: date,
+                        time_slot: slot,
+                        location: location,
+                        donation_type: donationType,
+                        purpose: purpose,
+                        notes: notes
+                    })
+                });
+
+                const data = await res.json();
+                if (res.ok && data.success) {
+                    showToast(`📅 ${data.message}`);
+                    appForm.reset();
+                    document.getElementById('app-donor-preview-box')?.classList.add('hidden');
+                    document.getElementById('app-donor-id').value = '';
+                    if (appDate) {
+                        const tomorrow = new Date();
+                        tomorrow.setDate(tomorrow.getDate() + 1);
+                        appDate.value = tomorrow.toISOString().split('T')[0];
+                    }
+                    loadAppointmentsList();
+                } else {
+                    showToast(`❌ ${data.message || 'เกิดข้อผิดพลาดในการจองคิวนัดหมาย'}`);
+                }
+            } catch (err) {
+                console.error('Appointment booking error:', err);
+                showToast('❌ ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้');
+            }
+        });
+    }
+
+    loadAppointmentsList();
+}
+
+
+async function loadAppointmentsList() {
+    const container = document.getElementById('appointments-container');
+    if (!container) return;
+
+    try {
+        const res = await fetch('/api/appointments');
+        const data = await res.json();
+
+        if (data && data.appointments) {
+            if (data.appointments.length === 0) {
+                container.innerHTML = '<p style="text-align: center; color: #94a3b8; padding: 20px;">ยังไม่มีรายการนัดหมายในขณะนี้</p>';
+                return;
+            }
+
+            let html = '';
+            data.appointments.forEach(app => {
+                const statusBadgeClass = app.status === 'completed' ? 'ready-badge' : (app.status === 'cancelled' ? 'wait-badge' : 'status-pending');
+                const statusLabel = app.status === 'completed' ? '✅ บริจาคเรียบร้อย' : (app.status === 'cancelled' ? '❌ ยกเลิกนัดหมาย' : '📅 รอนัดหมาย');
+
+                html += `
+                    <div class="appointment-card" style="background: rgba(255,255,255,0.7); padding: 16px; border-radius: 12px; margin-bottom: 12px; border: 1px solid rgba(0,0,0,0.06); display: flex; justify-content: space-between; align-items: flex-start;">
+                        <div>
+                            <h4 style="margin: 0 0 4px 0; color: #1e293b;">คุณ${app.donor_name || 'ผู้บริจาค'} <span class="blood-badge ${app.blood_type || 'O'}">หมู่ ${app.blood_type || 'O'}</span></h4>
+                            <p style="margin: 3px 0; font-size: 0.88rem; color: #475569;">🗓️ <strong>${app.appointment_date}</strong> (${app.time_slot})</p>
+                            <p style="margin: 3px 0; font-size: 0.85rem; color: #0284c7;">💉 <strong>ประเภท:</strong> ${app.donation_type || 'บริจาคโลหิตรวม'} | ❤️ <strong>วัตถุประสงค์:</strong> ${app.purpose || 'บริจาคทั่วไป'}</p>
+                            <p style="margin: 3px 0; font-size: 0.85rem; color: #64748b;">📍 ${app.location}</p>
+                            ${app.notes ? `<p style="margin: 3px 0; font-size: 0.8rem; color: #94a3b8;">💬 ${app.notes}</p>` : ''}
+                        </div>
+                        <div style="text-align: right;">
+                            <span class="eligibility-tag ${statusBadgeClass}" style="display: inline-block; margin-bottom: 8px;">${statusLabel}</span>
+                            ${currentRole === 'admin' && app.status === 'scheduled' ? `
+                                <div style="display:flex; gap:4px; justify-content:flex-end;">
+                                    <button class="btn btn-approve btn-sm" onclick="updateAppointmentStatus(${app.appointment_id}, 'completed')">✅ สำเร็จ</button>
+                                    <button class="btn btn-reject btn-sm" onclick="updateAppointmentStatus(${app.appointment_id}, 'cancelled')">❌ ยกเลิก</button>
+                                </div>
+                            ` : ''}
+                        </div>
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html;
+        }
+    } catch (err) {
+        console.error('Error loading appointments:', err);
+    }
+}
+
+
+async function updateAppointmentStatus(appId, newStatus) {
+    try {
+        const res = await fetch(`/api/appointments/${appId}/status`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: newStatus })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+            showToast(`✅ ${data.message}`);
+            loadAppointmentsList();
+        } else {
+            showToast(`❌ ${data.message || 'ไม่สามารถอัปเดตสถานะได้'}`);
+        }
+    } catch (err) {
+        console.error('Update appointment status error:', err);
+    }
+}
+
+/* ==========================================================================
+   15. E-Certificate PDF Generator Controller
+   ========================================================================== */
+function downloadCertificatePDF() {
+    const certElement = document.querySelector('.honor-certificate');
+    if (!certElement) {
+        showToast('⚠️ ไม่พบแบบฟอร์มใบประกาศเกียรติคุณ');
+        return;
+    }
+
+    if (typeof html2pdf === 'undefined') {
+        showToast('⚠️ กำลังโหลดไลบรารี PDF กรุณาลองใหม่อีกครั้ง');
+        return;
+    }
+
+    const donorName = document.getElementById('cert-donor-name')?.textContent || 'donor';
+    const opt = {
+        margin:       10,
+        filename:     `Certificate_BloodDonation_${donorName}.pdf`,
+        image:        { type: 'jpeg', quality: 0.98 },
+        html2canvas:  { scale: 2, useCORS: true },
+        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'landscape' }
+    };
+
+    showToast('📥 กำลังสร้างไฟล์ PDF ใบประกาศเกียรติคุณ...');
+
+    html2pdf().set(opt).from(certElement).save().then(() => {
+        showToast('🎉 ดาวน์โหลดใบประกาศเกียรติคุณ PDF สำเร็จ!');
+    }).catch(err => {
+        console.error('Error generating PDF:', err);
+        showToast('❌ ไม่สามารถสร้างไฟล์ PDF ได้');
+    });
+}
+
+
+/* ==========================================================================
+   16. 90-Day Due Donors Notifications, Station Locator & Audit Logs
+   ========================================================================== */
+async function loadDueNotifications() {
+    const listContainer = document.getElementById('due-donors-list');
+    const badgeCount = document.getElementById('due-count-badge');
+    if (!listContainer) return;
+
+    try {
+        const res = await fetch('/api/donors/due-notifications');
+        const data = await res.json();
+
+        if (data && data.success) {
+            if (badgeCount) badgeCount.textContent = data.count || 0;
+
+            if (!data.ready_donors || data.ready_donors.length === 0) {
+                listContainer.innerHTML = '<p style="color:#64748b; padding:10px;">ขณะนี้ยังไม่มีผู้บริจาคที่ครบรอบ 90 วันในสัปดาห์นี้</p>';
+                return;
+            }
+
+            let html = '';
+            data.ready_donors.forEach(d => {
+                html += `
+                    <div style="background:rgba(255,255,255,0.85); border:1px solid rgba(0,0,0,0.06); padding:12px 14px; border-radius:10px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                            <strong style="color:#1e293b;">คุณ${d.name}</strong>
+                            <span class="blood-badge ${d.blood_type.replace('+', '')}" style="font-size:0.75rem;">${d.blood_type}</span>
+                        </div>
+                        <p style="margin:2px 0; font-size:0.83rem; color:#475569;">📞 โทร: ${d.phone} | บัตร: <code>${d.id_card}</code></p>
+                        <p style="margin:2px 0; font-size:0.8rem; color:#16a34a; font-weight:600;">${d.status_message}</p>
+                    </div>
+                `;
+            });
+            listContainer.innerHTML = html;
+        }
+    } catch (err) {
+        console.error('Error loading due notifications:', err);
+    }
+}
+
+async function loadAuditLogs() {
+    const tableBody = document.getElementById('audit-logs-table-body');
+    if (!tableBody) return;
+
+    try {
+        const res = await fetch('/api/admin/audit-logs');
+        const data = await res.json();
+
+        if (data && data.logs) {
+            if (data.logs.length === 0) {
+                tableBody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px; color:#94a3b8;">ยังไม่มีประวัติการทำรายการในขณะนี้</td></tr>';
+                return;
+            }
+
+            let html = '';
+            data.logs.forEach(log => {
+                html += `
+                    <tr>
+                        <td><strong>#${log.log_id}</strong></td>
+                        <td><small style="color:#64748b;">${log.timestamp}</small></td>
+                        <td><span class="status-badge status-approved">🔑 ${log.admin_username}</span></td>
+                        <td><strong>${log.action_type}</strong></td>
+                        <td>${log.details || '-'}</td>
+                    </tr>
+                `;
+            });
+            tableBody.innerHTML = html;
+        }
+    } catch (err) {
+        console.error('Error loading audit logs:', err);
+    }
+}
+
+const stationsData = [
+    { id: 1, name: 'ศูนย์บริการโลหิตแห่งชาติ สภากาชาดไทย (ถนนอังรีดูนังต์)', region: 'กรุงเทพและปริมณฑล', address: 'ถนนอังรีดูนังต์ แขวงปทุมวัน เขตปทุมวัน กรุงเทพฯ', phone: '02-256-4300', hours: '07:30 - 19:30 น.', map_url: 'https://maps.google.com/?q=Thai+Red+Cross+Society' },
+    { id: 2, name: 'สถานีกาชาด เดอะมอลล์ บางกะปิ (ชั้น 3)', region: 'กรุงเทพและปริมณฑล', address: 'เดอะมอลล์ บางกะปิ ชั้น 3 ถนนลาดพร้าว กรุงเทพฯ', phone: '02-173-1000', hours: '12:00 - 18:00 น.', map_url: 'https://maps.google.com/?q=The+Mall+Bangkapi' },
+    { id: 3, name: 'สถานีกาชาด เดอะมอลล์ งามวงศ์วาน (ชั้น 5)', region: 'กรุงเทพและปริมณฑล', address: 'เดอะมอลล์ งามวงศ์วาน ชั้น 5 อ.เมือง นนทบุรี', phone: '02-555-1000', hours: '12:00 - 18:00 น.', map_url: 'https://maps.google.com/?q=The+Mall+Ngamwongwan' },
+    { id: 4, name: 'สถานีกาชาด เดอะมอลล์ บางแค (ชั้น P)', region: 'กรุงเทพและปริมณฑล', address: 'เดอะมอลล์ บางแค ชั้น P ถนนเพชรเกษม กรุงเทพฯ', phone: '02-487-1000', hours: '12:00 - 18:00 น.', map_url: 'https://maps.google.com/?q=The+Mall+Bangkae' },
+    { id: 5, name: 'สถานีกาชาด เดอะมอลล์ ท่าพระ (ชั้น 1)', region: 'กรุงเทพและปริมณฑล', address: 'เดอะมอลล์ ท่าพระ ชั้น 1 ถนนรัชดาภิเษก กรุงเทพฯ', phone: '02-469-1000', hours: '12:00 - 18:00 น.', map_url: 'https://maps.google.com/?q=The+Mall+Thapra' },
+    { id: 6, name: 'สถานีกาชาด ดิ เอ็มโพเรียม (ชั้น M)', region: 'กรุงเทพและปริมณฑล', address: 'ดิ เอ็มโพเรียม ชั้น M ถนนสุขุมวิท กรุงเทพฯ', phone: '02-269-1000', hours: '12:00 - 18:00 น.', map_url: 'https://maps.google.com/?q=Emporium+Bangkok' },
+    { id: 7, name: 'สถานีกาชาด ฟิวเจอร์พาร์ค รังสิต (ชั้น 3)', region: 'กรุงเทพและปริมณฑล', address: 'ฟิวเจอร์พาร์ค รังสิต ชั้น 3 อ.ธัญบุรี ปทุมธานี', phone: '02-958-0000', hours: '12:00 - 18:00 น.', map_url: 'https://maps.google.com/?q=Future+Park+Rangsit' },
+    { id: 8, name: 'สถานีกาชาด แฟชั่นไอส์แลนด์ (ชั้น 3)', region: 'กรุงเทพและปริมณฑล', address: 'แฟชั่นไอส์แลนด์ ชั้น 3 ถนนรามอินทรา กรุงเทพฯ', phone: '02-947-5000', hours: '12:00 - 18:00 น.', map_url: 'https://maps.google.com/?q=Fashion+Island+Bangkok' },
+    { id: 9, name: 'ธนาคารเลือด โรงพยาบาลจุฬาลงกรณ์', region: 'กรุงเทพและปริมณฑล', address: 'ตึกภูมิสิริมังคลานุสรณ์ ชั้น 3 รพ.จุฬาลงกรณ์', phone: '02-256-4000', hours: '08:30 - 16:30 น.', map_url: 'https://maps.google.com/?q=King+Chulalongkorn+Memorial+Hospital' },
+    { id: 10, name: 'ธนาคารเลือด โรงพยาบาลศิริราช', region: 'กรุงเทพและปริมณฑล', address: 'ตึก 72 ปี ชั้น 3 รพ.ศิริราช แบงกอกน้อย', phone: '02-419-7492', hours: '08:30 - 16:30 น.', map_url: 'https://maps.google.com/?q=Siriraj+Hospital' },
+    { id: 11, name: 'ธนาคารเลือด โรงพยาบาลรามาธิบดี', region: 'กรุงเทพและปริมณฑล', address: 'อาคารหลัก ชั้น 3 ถนนพระราม 6 กรุงเทพฯ', phone: '02-201-1200', hours: '08:30 - 16:30 น.', map_url: 'https://maps.google.com/?q=Ramathibodi+Hospital' },
+    { id: 12, name: 'ธนาคารเลือด โรงพยาบาลพระมงกุฎเกล้า', region: 'กรุงเทพและปริมณฑล', address: 'อาคารเฉลิมพระเกียรติ ชั้น 3 ถนนราชวิถี กรุงเทพฯ', phone: '02-763-9300', hours: '08:30 - 16:00 น.', map_url: 'https://maps.google.com/?q=Phramongkutklao+Hospital' },
+    { id: 13, name: 'ภาคบริการโลหิตแห่งชาติ ที่ 2 จังหวัดชลบุรี', region: 'ภาคกลาง', address: 'อ.เมือง ชลบุรี (ตรงข้าม รพ.ชลบุรี)', phone: '038-278-123', hours: '08:30 - 16:30 น.', map_url: 'https://maps.google.com/?q=Chonburi+Red+Cross' },
+    { id: 14, name: 'ภาคบริการโลหิตแห่งชาติ ที่ 3 จังหวัดนครสวรรค์', region: 'ภาคกลาง', address: 'อ.เมือง นครสวรรค์', phone: '056-221-123', hours: '08:30 - 16:30 น.', map_url: 'https://maps.google.com/?q=Nakhon+Sawan+Red+Cross' },
+    { id: 15, name: 'ภาคบริการโลหิตแห่งชาติ ที่ 5 จังหวัดนครราชสีมา', region: 'ภาคอีสาน', address: 'อ.เมือง นครราชสีมา', phone: '044-242-123', hours: '08:30 - 16:30 น.', map_url: 'https://maps.google.com/?q=Nakhon+Ratchasima+Red+Cross' },
+    { id: 16, name: 'ภาคบริการโลหิตแห่งชาติ ที่ 6 จังหวัดขอนแก่น', region: 'ภาคอีสาน', address: 'อ.เมือง ขอนแก่น', phone: '043-241-123', hours: '08:30 - 16:30 น.', map_url: 'https://maps.google.com/?q=Khon+Kaen+Red+Cross' },
+    { id: 17, name: 'ภาคบริการโลหิตแห่งชาติ ที่ 10 จังหวัดเชียงใหม่', region: 'ภาคเหนือ', address: 'อ.เมือง เชียงใหม่', phone: '053-241-123', hours: '08:30 - 16:30 น.', map_url: 'https://maps.google.com/?q=Chiang+Mai+Red+Cross' },
+    { id: 18, name: 'ภาคบริการโลหิตแห่งชาติ ที่ 11 จังหวัดภูเก็ต', region: 'ภาคใต้', address: 'อ.เมือง ภูเก็ต', phone: '076-211-123', hours: '08:30 - 16:30 น.', map_url: 'https://maps.google.com/?q=Phuket+Red+Cross' },
+    { id: 19, name: 'ภาคบริการโลหิตแห่งชาติ ที่ 12 จังหวัดสงขลา (หาดใหญ่)', region: 'ภาคใต้', address: 'อ.หาดใหญ่ สงขลา', phone: '074-241-123', hours: '08:30 - 16:30 น.', map_url: 'https://maps.google.com/?q=Hat+Yai+Red+Cross' },
+    { id: 20, name: 'หน่วยรับบริจาคโลหิตเคลื่อนที่ (Mobile Unit)', region: 'กรุงเทพและปริมณฑล', address: 'ออกหน่วยตามสถาบันการศึกษาและบริษัทเอกชนประจำวัน', phone: '02-256-4300', hours: '09:00 - 15:00 น.', map_url: 'https://maps.google.com/?q=Thai+Red+Cross+Society' }
+];
+
+function renderStationsList() {
+    const grid = document.getElementById('stations-grid');
+    const searchVal = (document.getElementById('station-search-input')?.value || '').toLowerCase().trim();
+    const regionVal = document.getElementById('station-region-filter')?.value || '';
+
+    if (!grid) return;
+
+    const filtered = stationsData.filter(s => {
+        const matchSearch = !searchVal || s.name.toLowerCase().includes(searchVal) || s.address.toLowerCase().includes(searchVal);
+        const matchRegion = !regionVal || s.region === regionVal;
+        return matchSearch && matchRegion;
+    });
+
+    if (filtered.length === 0) {
+        grid.innerHTML = '<p style="grid-column:1/-1; text-align:center; padding:30px; color:#94a3b8;">ไม่พบสถานีรับบริจาคโลหิตที่ค้นหา</p>';
+        return;
+    }
+
+    let html = '';
+    filtered.forEach(s => {
+        html += `
+            <div class="appointment-card" style="background:rgba(255,255,255,0.85); padding:16px; border-radius:12px; border:1px solid rgba(0,0,0,0.06);">
+                <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px;">
+                    <h4 style="margin:0; color:#1e293b; font-size:0.95rem;">📍 ${s.name}</h4>
+                    <span class="eligibility-tag ready-badge" style="font-size:0.75rem;">🟢 เปิดบริการ</span>
+                </div>
+                <p style="margin:4px 0; font-size:0.83rem; color:#475569;">🏢 <strong>ภูมิภาค:</strong> ${s.region}</p>
+                <p style="margin:4px 0; font-size:0.83rem; color:#64748b;">📍 ${s.address}</p>
+                <p style="margin:4px 0; font-size:0.83rem; color:#0284c7;">🕒 <strong>เวลาทำการ:</strong> ${s.hours}</p>
+                <p style="margin:4px 0; font-size:0.83rem; color:#334155;">📞 <strong>เบอร์ติดต่อ:</strong> ${s.phone}</p>
+                <div style="margin-top:12px; text-align:right;">
+                    <a href="${s.map_url}" target="_blank" class="btn btn-secondary btn-sm" style="text-decoration:none;">🗺️ เปิดพิกัด Google Maps</a>
+                </div>
+            </div>
+        `;
+    });
+    grid.innerHTML = html;
+}
+
+
