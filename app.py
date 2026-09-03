@@ -551,15 +551,41 @@ def record_donation():
             'message': f'ผู้บริจาคมีน้ำหนัก {donor.weight} กก. ซึ่งน้อยกว่าเกณฑ์ขั้นต่ำ 45 กิโลกรัม ไม่สามารถบริจาคเลือดได้'
         }), 400
 
-    donation_result = donor.record_donation(conn, volume_ml=volume_ml, donation_date=donation_date, notes=notes)
+    requester_role = data.get('requester_role', 'user')
+    is_approved = (requester_role == 'admin')
+
+    donation_result = donor.record_donation(conn, volume_ml=volume_ml, donation_date=donation_date, notes=notes, is_approved=is_approved)
     conn.close()
+
+    msg = f"บันทึกการบริจาคเรียบร้อยแล้ว (สะสมรวม {donor.donation_count} ครั้ง)" if is_approved else "บันทึกการบริจาคเรียบร้อยแล้ว (รอเจ้าหน้าที่ Admin ตรวจสอบและอนุมัติ)"
 
     return jsonify({
         'success': True,
-        'message': f'บันทึกการบริจาคเรียบร้อยแล้ว (สะสมรวม {donor.donation_count} ครั้ง)',
+        'message': msg,
         'donor': donor.to_dict(),
         'result': donation_result
     })
+
+@app.route('/api/donations/pending', methods=['GET'])
+def get_pending_donations():
+    conn = get_db_connection()
+    pending_records = Donor.get_pending_donation_records(conn)
+    conn.close()
+    return jsonify({'success': True, 'count': len(pending_records), 'records': pending_records})
+
+@app.route('/api/donations/<int:record_id>/verify', methods=['PUT'])
+def verify_donation_record(record_id):
+    data = request.json or {}
+    action = data.get('action', 'approve')
+    
+    conn = get_db_connection()
+    ok, msg = Donor.verify_donation_record(conn, record_id, action)
+    conn.close()
+    
+    if not ok:
+        return jsonify({'success': False, 'message': msg}), 404
+        
+    return jsonify({'success': True, 'message': msg})
 
 @app.route('/api/inventory', methods=['GET'])
 def get_inventory():
@@ -634,9 +660,14 @@ def get_stats():
     cursor.execute("SELECT COUNT(*) FROM donors WHERE status = 'approved' AND donation_count >= 7")
     count_7 = cursor.fetchone()[0]
 
-    # 6. Pending Donors Count
+    # 6. Pending Counts (Donors + Donation Records)
     cursor.execute("SELECT COUNT(*) FROM donors WHERE status = 'pending'")
-    pending_count = cursor.fetchone()[0]
+    pending_donors_count = cursor.fetchone()[0] or 0
+
+    cursor.execute("SELECT COUNT(*) FROM donation_records WHERE status = 'pending_verification'")
+    pending_records_count = cursor.fetchone()[0] or 0
+
+    pending_count = pending_donors_count + pending_records_count
 
     conn.close()
 

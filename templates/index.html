@@ -961,7 +961,7 @@
             <!-- Admin Verification Panel for Pending Registrations -->
             <div id="pending-approval-card" class="glass-card margin-bottom-25 admin-only hidden" style="border-left: 5px solid #f59e0b;">
                 <div class="card-header">
-                    <h3 style="color: #d97706;">⏳ รายการรอตรวจสอบและอนุมัติลงทะเบียน (Pending Registrations)</h3>
+                    <h3 style="color: #d97706;">⏳ รายการรอตรวจสอบและอนุมัติลงทะเบียนผู้บริจาค (Pending Donor Registrations)</h3>
                 </div>
                 <div class="table-responsive">
                     <table class="data-table">
@@ -979,6 +979,32 @@
                         </thead>
                         <tbody id="pending-donors-table-body">
                             <tr><td colspan="8" style="text-align: center; color: #94a3b8; padding: 15px;">ไม่มีรายการที่รอการตรวจสอบในขณะนี้</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Admin Verification Panel for Pending Donation Records -->
+            <div id="pending-donations-approval-card" class="glass-card margin-bottom-25 admin-only hidden" style="border-left: 5px solid #ef4444;">
+                <div class="card-header">
+                    <h3 style="color: #dc2626;">💉 รายการบันทึกการบริจาคที่รอ Admin ยืนยัน (Pending Donation Verification)</h3>
+                </div>
+                <div class="table-responsive">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Record ID</th>
+                                <th>ชื่อผู้บริจาค</th>
+                                <th>เลขบัตรประชาชน</th>
+                                <th>หมู่เลือด</th>
+                                <th>วันที่บริจาค</th>
+                                <th>ปริมาณ (ml)</th>
+                                <th>บันทึกเจ้าหน้าที่</th>
+                                <th>ยืนยันการบริจาค (Admin Action)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="pending-donations-table-body">
+                            <tr><td colspan="8" style="text-align: center; color: #94a3b8; padding: 15px;">ไม่มีรายการบันทึกการบริจาคที่รอการยืนยันในขณะนี้</td></tr>
                         </tbody>
                     </table>
                 </div>

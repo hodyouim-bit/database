@@ -24,6 +24,7 @@ document.addEventListener('DOMContentLoaded', () => {
     loadBloodInventory();
     loadDonorsList();
     loadPendingDonors();
+    loadPendingDonationRecords();
     populateDonorSelects();
 
     // Real-time Live Polling Auto-Refresh (every 5 seconds)
@@ -190,12 +191,14 @@ function setRoleState(role, displayName = '') {
     const adminBadge = document.getElementById('admin-status-badge');
     const nameSpan = document.getElementById('user-display-name');
     const pendingCard = document.getElementById('pending-approval-card');
+    const pendingDonationsCard = document.getElementById('pending-donations-approval-card');
 
     if (role === 'admin') {
         if (loginBtn) loginBtn.classList.add('hidden');
         if (userBadge) userBadge.classList.add('hidden');
         if (adminBadge) adminBadge.classList.remove('hidden');
         if (pendingCard) pendingCard.classList.remove('hidden');
+        if (pendingDonationsCard) pendingDonationsCard.classList.remove('hidden');
         const adminNameSpan = document.getElementById('admin-display-name');
         if (adminNameSpan) adminNameSpan.textContent = displayName || '6812732101';
     } else if (role === 'user') {
@@ -203,12 +206,14 @@ function setRoleState(role, displayName = '') {
         if (adminBadge) adminBadge.classList.add('hidden');
         if (userBadge) userBadge.classList.remove('hidden');
         if (pendingCard) pendingCard.classList.add('hidden');
+        if (pendingDonationsCard) pendingDonationsCard.classList.add('hidden');
         if (nameSpan) nameSpan.textContent = displayName || 'ผู้ใช้งานทั่วไป';
     } else {
         if (loginBtn) loginBtn.classList.remove('hidden');
         if (userBadge) userBadge.classList.add('hidden');
         if (adminBadge) adminBadge.classList.add('hidden');
         if (pendingCard) pendingCard.classList.add('hidden');
+        if (pendingDonationsCard) pendingDonationsCard.classList.add('hidden');
     }
 }
 
@@ -337,6 +342,7 @@ function switchTab(tabId) {
     if (tabId === 'donors-list') {
         loadDonorsList();
         loadPendingDonors();
+        loadPendingDonationRecords();
     }
     if (tabId === 'stations-map') renderStationsList();
     if (tabId === 'audit-logs') loadAuditLogs();
@@ -764,14 +770,17 @@ function initRecordDonationForm() {
                     donor_id: donorId,
                     volume_ml: volumeMl,
                     donation_date: donationDate,
-                    notes: notes
+                    notes: notes,
+                    requester_role: currentRole
                 })
             });
 
             const data = await res.json();
             if (res.ok && data.success) {
-                const updatedDonor = data.donor;
-                let toastMsg = `💉 บันทึกการบริจาคสำเร็จ! สะสมรวมเป็น ${updatedDonor.donation_count} ครั้ง`;
+                const isApproved = (data.result?.status === 'approved');
+                let toastMsg = isApproved 
+                    ? `💉 บันทึกและอนุมัติการบริจาคสำเร็จ! สะสมรวมเป็น ${data.donor.donation_count} ครั้ง` 
+                    : `💉 บันทึกรายการบริจาคสำเร็จ! รอเจ้าหน้าที่ Admin ตรวจสอบและยืนยันข้อมูล`;
                 
                 if (data.result?.newly_unlocked_milestone) {
                     toastMsg += ` 🏆 ปลดล็อกรางวัลใหม่: ${data.result.newly_unlocked_milestone.title}!`;
@@ -782,6 +791,7 @@ function initRecordDonationForm() {
                 previewCard.classList.add('hidden');
                 loadDashboardStats();
                 loadBloodInventory();
+                loadPendingDonationRecords();
                 populateDonorSelects();
                 loadDonorsList();
             } else {

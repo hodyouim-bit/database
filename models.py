@@ -174,6 +174,7 @@ def init_db():
             blood_pressure VARCHAR(50) DEFAULT '120/80',
             pulse_rate INTEGER DEFAULT 75,
             staff_notes TEXT,
+            status VARCHAR(50) DEFAULT 'approved',
             FOREIGN KEY (donor_id) REFERENCES donors (donor_id) ON DELETE CASCADE
         );
         ''')
@@ -283,6 +284,7 @@ def init_db():
             blood_pressure TEXT DEFAULT '120/80',
             pulse_rate INTEGER DEFAULT 75,
             staff_notes TEXT,
+            status TEXT DEFAULT 'approved',
             FOREIGN KEY (donor_id) REFERENCES donors (donor_id) ON DELETE CASCADE
         );
         ''')
@@ -377,6 +379,12 @@ def init_db():
 
         try:
             cursor.execute("ALTER TABLE donors ADD COLUMN password TEXT")
+            conn.commit()
+        except Exception:
+            conn.rollback()
+
+        try:
+            cursor.execute("ALTER TABLE donation_records ADD COLUMN status TEXT DEFAULT 'approved'")
             conn.commit()
         except Exception:
             conn.rollback()
@@ -781,35 +789,90 @@ class Donor:
             'honor_level': f"เข็มเชิดชูเกียรติ ชั้นที่ {highest_milestone['count']}"
         }
 
-    def record_donation(self, db_conn, volume_ml=450, donation_date=None, notes=''):
+    def record_donation(self, db_conn, volume_ml=450, donation_date=None, notes='', is_approved=False):
         if not donation_date:
             donation_date = datetime.now().strftime('%Y-%m-%d')
             
+        initial_status = 'approved' if is_approved else 'pending_verification'
         cursor = db_conn.cursor()
         cursor.execute('''
-        INSERT INTO donation_records (donor_id, donation_date, volume_ml, staff_notes)
-        VALUES (?, ?, ?, ?)
-        ''', (self.donor_id, donation_date, volume_ml, notes))
+        INSERT INTO donation_records (donor_id, donation_date, volume_ml, staff_notes, status)
+        VALUES (?, ?, ?, ?, ?)
+        ''', (self.donor_id, donation_date, volume_ml, notes, initial_status))
         
-        self.donation_count += 1
-        self.last_donation_date = donation_date
+        if is_approved:
+            self.donation_count += 1
+            self.last_donation_date = donation_date
+            
+            cursor.execute('''
+            UPDATE donors 
+            SET donation_count = ?, last_donation_date = ?
+            WHERE donor_id = ?
+            ''', (self.donation_count, self.last_donation_date, self.donor_id))
+            
+            db_conn.commit()
+            newly_unlocked = [m for m in self.MILESTONES if m['count'] == self.donation_count]
+            
+            return {
+                'status': 'approved',
+                'new_donation_count': self.donation_count,
+                'donation_date': donation_date,
+                'newly_unlocked_milestone': newly_unlocked[0] if newly_unlocked else None,
+                'standard_rewards': self.get_standard_rewards()
+            }
+        else:
+            db_conn.commit()
+            return {
+                'status': 'pending_verification',
+                'new_donation_count': self.donation_count,
+                'donation_date': donation_date,
+                'message': 'บันทึกการบริจาคสำเร็จ! อยู่ระหว่างรอเจ้าหน้าที่ Admin ตรวจสอบและยืนยัน'
+            }
+
+    @staticmethod
+    def verify_donation_record(db_conn, record_id, action='approve'):
+        cursor = db_conn.cursor()
+        cursor.execute('SELECT * FROM donation_records WHERE record_id = ?', (record_id,))
+        row = cursor.fetchone()
+        if not row:
+            return False, "ไม่พบรายการบันทึกการบริจาค"
+
+        donor_id = row['donor_id']
+        donation_date = row['donation_date']
         
+        if action == 'approve':
+            cursor.execute("UPDATE donation_records SET status = 'approved' WHERE record_id = ?", (record_id,))
+            
+            cursor.execute('SELECT * FROM donors WHERE donor_id = ?', (donor_id,))
+            d_row = cursor.fetchone()
+            new_count = 1
+            if d_row:
+                donor = Donor.from_row(d_row)
+                new_count = donor.donation_count + 1
+                cursor.execute('''
+                UPDATE donors 
+                SET donation_count = ?, last_donation_date = ?
+                WHERE donor_id = ?
+                ''', (new_count, donation_date, donor_id))
+            db_conn.commit()
+            return True, f"อนุมัติรายการบันทึกการบริจาคเรียบร้อยแล้ว (สะสมรวมเป็น {new_count} ครั้ง)"
+        else:
+            cursor.execute("UPDATE donation_records SET status = 'rejected' WHERE record_id = ?", (record_id,))
+            db_conn.commit()
+            return True, "ปฏิเสธรายการบันทึกการบริจาคแล้ว"
+
+    @staticmethod
+    def get_pending_donation_records(db_conn):
+        cursor = db_conn.cursor()
         cursor.execute('''
-        UPDATE donors 
-        SET donation_count = ?, last_donation_date = ?
-        WHERE donor_id = ?
-        ''', (self.donation_count, self.last_donation_date, self.donor_id))
-        
-        db_conn.commit()
-        
-        newly_unlocked = [m for m in self.MILESTONES if m['count'] == self.donation_count]
-        
-        return {
-            'new_donation_count': self.donation_count,
-            'donation_date': donation_date,
-            'newly_unlocked_milestone': newly_unlocked[0] if newly_unlocked else None,
-            'standard_rewards': self.get_standard_rewards()
-        }
+        SELECT r.*, d.name as donor_name, d.id_card, d.blood_type, d.rh_factor, d.phone
+        FROM donation_records r
+        JOIN donors d ON r.donor_id = d.donor_id
+        WHERE r.status = 'pending_verification'
+        ORDER BY r.record_id DESC
+        ''')
+        rows = cursor.fetchall()
+        return [dict(r) for r in rows]
 
     def to_dict(self):
         return {
